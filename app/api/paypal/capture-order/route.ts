@@ -1,6 +1,64 @@
 import { NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { validatePromoCode } from '@/app/actions/coupons';
+import { sendMail } from '@/lib/email';
+import crypto from 'crypto';
+
+const paymentReceiptTemplate = ({
+  name,
+  planName,
+  amount,
+  transactionId,
+  date
+}: any) => `
+<div style="font-family:sans-serif;max-width:600px;margin:auto;">
+  <h2 style="color:#0891b2;">Payment Receipt</h2>
+  <p>Hey ${name},</p>
+  <p>Thank you for purchasing your Preventive Health Plan.</p>
+
+  <p><strong>Plan:</strong> ${planName}</p>
+  <p><strong>Amount Paid:</strong> $${amount}</p>
+  <p><strong>Transaction ID:</strong> ${transactionId}</p>
+  <p><strong>Date:</strong> ${date}</p>
+
+  <br/>
+  <p>Regards,<br/><strong>HealthMitra Team</strong></p>
+</div>
+`;
+
+const welcomeTemplate = ({
+  name,
+  email,
+  userId,
+  password,
+  planName,
+  amount,
+  transactionId
+}: any) => `
+<div style="font-family:sans-serif;max-width:600px;margin:auto;">
+  <p>Dear ${name},</p>
+
+  <p>Thank you for choosing <strong>HealthMitra</strong>.</p>
+
+  <p>You have successfully purchased <strong>${planName}</strong>.</p>
+
+  <p><strong>Transaction ID:</strong> ${transactionId}</p>
+  <p><strong>Amount:</strong> $${amount}</p>
+
+  <p>Your login details to access the Customer Panel:</p>
+  <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 10px 0;">
+    <p style="margin: 0 0 10px 0;"><strong>User ID:</strong> ${userId || email}</p>
+    <p style="margin: 0;"><strong>Password:</strong> ${password || '(Use your existing password)'}</p>
+  </div>
+
+  <p>Please download your temporary e-card from your dashboard.</p>
+
+  <p>If you need help, contact us at support.</p>
+
+  <br/>
+  <p>Warm regards,<br/><strong>Team HealthMitra</strong></p>
+</div>
+`;
 
 async function getPayPalAccessToken(clientId: string, clientSecret: string, sandbox: boolean) {
     const base = sandbox ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
@@ -92,6 +150,36 @@ export async function POST(request: Request) {
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + (plan.duration_days || 365));
 
+        // Check if first time user (no existing memberships)
+        const { data: existingMembers } = await adminClient
+            .from('ecard_members')
+            .select('id')
+            .eq('user_id', user.id)
+            .limit(1);
+        
+        const isFirstTimeUser = !existingMembers || existingMembers.length === 0;
+
+        let generatedUserId = '';
+        let generatedPassword = '';
+        
+        if (isFirstTimeUser) {
+            // Generate HM-XXXXXX
+            const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+            generatedUserId = `HM-${randomCode}`;
+            
+            // Generate 8 char password
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
+            for (let i = 0; i < 8; i++) {
+                generatedPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+
+            // Update user's password in Supabase Auth
+            await adminClient.auth.admin.updateUserById(user.id, { password: generatedPassword });
+        } else {
+            // For existing users, just generate a standard card ID, they already have a password
+            generatedUserId = `HM${Date.now()}${crypto.randomUUID().replace(/-/g,'').slice(0,6).toUpperCase()}`;
+        }
+
         const { data: member, error: memberError } = await adminClient
             .from('ecard_members')
             .insert({
@@ -103,7 +191,7 @@ export async function POST(request: Request) {
                 valid_from: startDate.toISOString().split('T')[0],
                 valid_till: expiryDate.toISOString().split('T')[0],
                 coverage_amount: plan.coverage_amount || plan.price * 100,
-                card_unique_id: `HM${Date.now()}${crypto.randomUUID().replace(/-/g,'').slice(0,9).toUpperCase()}`,
+                card_unique_id: generatedUserId,
             })
             .select().single();
 
@@ -139,6 +227,38 @@ export async function POST(request: Request) {
             status: 'paid',
         });
 
+        if (user.email) {
+            const name = user.email.split('@')[0];
+            
+            // 1️⃣ Payment Receipt
+            await sendMail({
+                to: user.email,
+                subject: `Payment Receipt - ${plan.name}`,
+                html: paymentReceiptTemplate({
+                    name,
+                    planName: plan.name,
+                    amount: finalAmount,
+                    transactionId: captureId || paypalOrderId,
+                    date: new Date().toLocaleDateString()
+                })
+            });
+
+            // 2️⃣ Welcome Email
+            await sendMail({
+                to: user.email,
+                subject: `Welcome to ${plan.name} - HealthMitra`,
+                html: welcomeTemplate({
+                    name,
+                    email: user.email,
+                    userId: isFirstTimeUser ? generatedUserId : null,
+                    password: isFirstTimeUser ? generatedPassword : null,
+                    planName: plan.name,
+                    amount: finalAmount,
+                    transactionId: captureId || paypalOrderId
+                })
+            });
+        }
+
         return NextResponse.json({
             success: true,
             data: {
@@ -148,6 +268,7 @@ export async function POST(request: Request) {
                 startDate: startDate.toISOString(),
                 expiryDate: expiryDate.toISOString(),
                 transactionId: captureId || paypalOrderId,
+                isFirstTimeUser,
             },
         });
     } catch (error: any) {

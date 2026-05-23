@@ -30,7 +30,7 @@ export function Header() {
           .select('full_name')
           .eq('id', user.id)
           .single()
-        
+
         if (profile?.full_name) {
           setUserName(profile.full_name)
         } else if (user.email) {
@@ -133,8 +133,8 @@ export function Header() {
                   Sign In
                 </Button>
               </Link>
-              <Link href="/signup">
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Get Started</Button>
+              <Link href="/plans">
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">View Plans</Button>
               </Link>
             </>
           )}
@@ -209,8 +209,8 @@ export function Header() {
                       Sign In
                     </Button>
                   </Link>
-                  <Link href="/signup" className="w-full">
-                    <Button className="w-full bg-primary hover:bg-primary/90">Get Started</Button>
+                  <Link href="/plans" className="w-full">
+                    <Button className="w-full bg-primary hover:bg-primary/90">View Plans</Button>
                   </Link>
                 </>
               )}

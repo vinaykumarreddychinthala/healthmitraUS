@@ -225,6 +225,7 @@ export default function AdminServiceRequestsPage() {
                             <TableRow className="bg-slate-50 border-slate-200">
                                 <TableHead className="text-slate-600 font-semibold">ID</TableHead>
                                 <TableHead className="text-slate-600 font-semibold">Customer</TableHead>
+                                <TableHead className="text-slate-600 font-semibold">Plan / Policy Holder</TableHead>
                                 <TableHead className="text-slate-600 font-semibold">Type</TableHead>
                                 <TableHead className="text-slate-600 font-semibold">Status</TableHead>
                                 <TableHead className="text-slate-600 font-semibold">Assigned To</TableHead>
@@ -244,6 +245,25 @@ export default function AdminServiceRequestsPage() {
                                             {req.customerEmail && <span>{req.customerEmail}</span>}
                                             {req.customerContact && <span>{req.customerContact}</span>}
                                         </div>
+                                    </TableCell>
+                                    {/* Plan + Policy Holder column */}
+                                    <TableCell>
+                                        {(req.details as any)?.plan_name ? (
+                                            <div className="space-y-0.5">
+                                                <p className="text-xs font-semibold text-teal-700">
+                                                    {(req.details as any).plan_name}
+                                                </p>
+                                                {(req.details as any)?.policy_holder_name && (
+                                                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                                                        <User className="h-3 w-3" />
+                                                        {(req.details as any).policy_holder_name}
+                                                        <span className="text-slate-400">({(req.details as any).policy_holder_relation})</span>
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-slate-400 italic">—</span>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className={`${PRIORITY_COLORS[req.priority || 'medium']} text-xs`}>

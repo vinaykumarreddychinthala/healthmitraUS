@@ -413,7 +413,7 @@ export default async function Home() {
                             </li>
                           ))}
                       </ul>
-                      <Link href="/plans" className="block">
+                      <Link href={`/checkout-auth/${plan.id}`} className="block">
                         <Button
                           className={`w-full ${idx === 1 ? "bg-teal-600 hover:bg-teal-700" : "bg-slate-900 hover:bg-slate-800"}`}
                         >

@@ -16,6 +16,7 @@ function LoginFormContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const message = searchParams.get("message");
+  const purchased = searchParams.get("purchased") === 'true';
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -40,12 +41,19 @@ function LoginFormContent() {
     <div className="w-full max-w-sm space-y-8 animate-in fade-in slide-in-from-left-8 duration-500 delay-100">
       <div className="text-center">
         <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-          Welcome back
+          {purchased ? 'Access Your Dashboard' : 'Welcome back'}
         </h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          Sign in to your account
+          {purchased ? 'Use the credentials sent to your email' : 'Sign in to your account'}
         </p>
-        {message && (
+        {purchased && (
+          <div className="mt-4 p-4 bg-emerald-50 text-emerald-700 text-sm rounded-xl border border-emerald-200 text-left space-y-1">
+            <p className="font-bold text-emerald-800 flex items-center gap-2">✅ Purchase Successful!</p>
+            <p>We&apos;ve sent your <strong>User ID</strong> and <strong>Password</strong> to your email.</p>
+            <p className="text-xs text-emerald-600 mt-1">Enter those credentials below to access your Customer Panel.</p>
+          </div>
+        )}
+        {message && !purchased && (
           <div className="mt-4 p-3 bg-green-50 text-green-600 text-sm rounded-lg border border-green-100">
             {message}
           </div>
@@ -54,14 +62,14 @@ function LoginFormContent() {
 
       <form action={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">User ID</Label>
           <div className="relative">
             <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <Input
               id="email"
               name="email"
-              type="email"
-              placeholder="name@example.com"
+              type="text"
+              placeholder="HM-XXXXXX or Email"
               required
               className="pl-10 bg-slate-50 border-slate-200"
             />
@@ -105,15 +113,7 @@ function LoginFormContent() {
         </Button>
       </form>
 
-      <p className="px-8 text-center text-sm text-slate-600 dark:text-slate-400">
-        Don&apos;t have an account?{" "}
-        <Link
-          href="/signup"
-          className="font-semibold text-teal-600 hover:text-teal-500 underline underline-offset-4"
-        >
-          Sign up
-        </Link>
-      </p>
+      {/* Removed Sign Up Link as per requirements */}
     </div>
   );
 }

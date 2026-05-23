@@ -121,7 +121,7 @@ export async function getMyPurchases() {
             member_name: m.full_name,
             relation: m.relation,
             card_number: m.card_unique_id,
-            max_members: m.plans?.member_count_max || 4,
+            max_members: m.plans?.member_count_max ?? 1,
             isFirstPurchase: m.relation === 'Self'
         };
     });

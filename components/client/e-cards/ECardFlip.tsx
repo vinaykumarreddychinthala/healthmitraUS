@@ -2,14 +2,16 @@
 
 import React, { useState } from 'react';
 import { ECardMember } from '@/types/ecard';
-import { Download, Share2, Wallet, RefreshCw, Smartphone, Mail, Clock, Shield, Phone, Globe, ChevronRight, QrCode, CheckCircle } from 'lucide-react';
+import { Download, Share2, Wallet, RefreshCw, Smartphone, Mail, Clock, Shield, Phone, Globe, ChevronRight, QrCode, CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
 import EmailECardModal from './EmailECardModal';
 
 interface ECardFlipProps {
     card: ECardMember;
+    kycStatus?: boolean | 'loading';
+    onDownloadClick?: (type: 'download-pdf' | 'download-img') => void;
 }
 
-export default function ECardFlip({ card }: ECardFlipProps) {
+export default function ECardFlip({ card, kycStatus, onDownloadClick }: ECardFlipProps) {
     const [isFlipped, setIsFlipped] = useState(false);
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
@@ -285,16 +287,20 @@ export default function ECardFlip({ card }: ECardFlipProps) {
             {/* Action Buttons (Outside Card - always visible) */}
             <div className="mt-4 grid grid-cols-3 gap-2">
                 <button
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors"
+                    onClick={(e) => { e.stopPropagation(); onDownloadClick?.('download-pdf'); }}
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-xl transition-colors"
+                    title={kycStatus === true ? 'Download PDF' : 'Complete KYC to download'}
                 >
-                    <Download size={14} /> PDF
+                    {kycStatus === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    {kycStatus === true ? 'PDF' : kycStatus === 'loading' ? '...' : '🔒 PDF'}
                 </button>
                 <button
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors"
+                    onClick={(e) => { e.stopPropagation(); onDownloadClick?.('download-img'); }}
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-xl transition-colors"
+                    title={kycStatus === true ? 'Download Image' : 'Complete KYC to download'}
                 >
-                    <Smartphone size={14} /> Image
+                    {kycStatus === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <Smartphone size={14} />}
+                    {kycStatus === true ? 'Image' : kycStatus === 'loading' ? '...' : '🔒 Img'}
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); setIsFlipped(!isFlipped); }}

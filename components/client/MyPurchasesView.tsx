@@ -193,11 +193,21 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                         <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2 text-sm">
                                             <span className="flex items-center gap-1.5 text-slate-600">
                                                 <Users size={14} className="text-slate-400" />
-                                                Members: <strong>{purchase.members_count || 4}</strong>
+                                                Members: <strong>{purchase.members_count ?? 1}</strong>/<strong>{purchase.max_members ?? 1}</strong>
                                             </span>
                                             <span className="flex items-center gap-1.5 text-teal-600 font-semibold">
                                                 Coverage: ${purchase.coverage_amount?.toLocaleString('en-IN')}
                                             </span>
+                                            {/* Plan type badge */}
+                                            {(purchase.max_members ?? 1) === 1 ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-xs font-semibold">
+                                                    👤 Single Member
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
+                                                    👨‍👩‍👧‍👦 Multi Member · up to {purchase.max_members}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -212,14 +222,17 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                     >
                                         <Eye size={14} className="mr-1" /> View Details
                                     </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleManageMembers(purchase)}
-                                        className="text-slate-600 w-full sm:w-auto"
-                                    >
-                                        <Users size={14} className="mr-1" /> Manage Members
-                                    </Button>
+                                    {/* Only show Manage Members for multi-member plans */}
+                                    {(purchase.max_members ?? 1) > 1 && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleManageMembers(purchase)}
+                                            className="text-slate-600 w-full sm:w-auto"
+                                        >
+                                            <Users size={14} className="mr-1" /> Manage Members
+                                        </Button>
+                                    )}
                                     <Link href="/e-cards" className="w-full sm:w-auto">
                                         <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white w-full">
                                             <Smartphone size={14} className="mr-1" /> Get E-Cards
@@ -274,7 +287,7 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                         <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2 text-sm text-slate-500">
                                             <span className="flex items-center gap-1.5">
                                                 <Users size={14} className="text-slate-400" />
-                                                Members: {purchase.members_count || 4}
+                                                Members: {purchase.members_count ?? 1}/{purchase.max_members ?? 1}
                                             </span>
                                             <span>
                                                 Coverage: ${purchase.coverage_amount?.toLocaleString('en-IN')}
@@ -362,7 +375,10 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded-lg">
                                     <p className="text-xs text-slate-500 uppercase">Members</p>
-                                    <p className="font-bold text-slate-800">{selectedPurchase.members_count || 4}</p>
+                                    <p className="font-bold text-slate-800">{selectedPurchase.members_count ?? 1} / {selectedPurchase.max_members ?? 1}</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">
+                                        {(selectedPurchase.max_members ?? 1) === 1 ? '👤 Single Member Plan' : `👨‍👩‍👧‍👦 Multi Member · up to ${selectedPurchase.max_members}`}
+                                    </p>
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded-lg">
                                     <p className="text-xs text-slate-500 uppercase">Status</p>
@@ -412,15 +428,21 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                     <DialogHeader>
                         <DialogTitle>Manage Members - {selectedPurchase?.plan_name}</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4">
-                            <div className="flex justify-between items-center mb-4">
+                          <div className="space-y-4">
+                            {/* Member count header */}
+                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                                 <span className="text-sm font-medium text-slate-700">
-                                    {selectedPurchase?.family_members?.length || 1} / {selectedPurchase?.max_members || 4} Members Added
+                                    {(selectedPurchase?.family_members?.length || 0) + 1} / {selectedPurchase?.max_members ?? 1} E-Cards issued
                                 </span>
+                                {(selectedPurchase?.max_members ?? 1) === 1 ? (
+                                    <span className="text-xs px-2 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-200 font-semibold">👤 Single Member Plan</span>
+                                ) : (
+                                    <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold">👨‍👩‍👧‍👦 Multi Member</span>
+                                )}
                             </div>
 
                             <div className="space-y-3">
-                                {/* Always show Self member first */}
+                                {/* Primary (Self) member — always shown */}
                                 <div className="flex items-center justify-between p-3 rounded-lg border bg-emerald-50 border-emerald-200">
                                     <div className="flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 bg-emerald-500 text-white">
@@ -434,7 +456,7 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                     <Lock size={14} className="text-slate-400" />
                                 </div>
 
-                                {/* List added family members */}
+                                {/* Additional family members */}
                                 {selectedPurchase?.family_members?.map((member: any, idx: number) => (
                                     <div key={member.id || idx} className="flex items-center justify-between p-3 rounded-lg border bg-emerald-50 border-emerald-200">
                                         <div className="flex items-center gap-3">
@@ -450,15 +472,28 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                     </div>
                                 ))}
 
-                                {/* Add New Member Button if limit not reached */}
-                                {((selectedPurchase?.family_members?.length || 0) + 1) < (selectedPurchase?.max_members || 4) && (
-                                    <div
-                                        className="flex items-center justify-center p-4 rounded-lg border border-dashed border-teal-300 bg-teal-50 hover:bg-teal-100 cursor-pointer transition-colors"
-                                        onClick={handleAddMemberClick}
-                                    >
-                                        <div className="flex items-center gap-2 text-teal-700 font-semibold">
-                                            <Plus size={18} /> Add New Member
+                                {/* Add member slot — only for multi plans with remaining slots */}
+                                {(selectedPurchase?.max_members ?? 1) > 1 && (
+                                    ((selectedPurchase?.family_members?.length || 0) + 1) < (selectedPurchase?.max_members ?? 1) ? (
+                                        <div
+                                            className="flex items-center justify-center p-4 rounded-lg border border-dashed border-teal-300 bg-teal-50 hover:bg-teal-100 cursor-pointer transition-colors"
+                                            onClick={handleAddMemberClick}
+                                        >
+                                            <div className="flex items-center gap-2 text-teal-700 font-semibold">
+                                                <Plus size={18} /> Add New Member
+                                            </div>
                                         </div>
+                                    ) : (
+                                        <div className="flex items-center justify-center gap-2 p-4 rounded-lg border border-slate-200 bg-slate-50 text-slate-400 text-sm">
+                                            <Lock size={14} /> All member slots are filled ({selectedPurchase?.max_members} / {selectedPurchase?.max_members})
+                                        </div>
+                                    )
+                                )}
+
+                                {/* Single member plan — locked state */}
+                                {(selectedPurchase?.max_members ?? 1) === 1 && (
+                                    <div className="flex items-center justify-center gap-2 p-4 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-sm">
+                                        <Lock size={14} /> This is a Single Member plan — only 1 E-Card is issued
                                     </div>
                                 )}
                             </div>

@@ -92,7 +92,7 @@ export default async function PlansPage() {
                                         </li>
                                     ))}
                                 </ul>
-                                <Link href="/signup" className="block">
+                                <Link href={`/checkout-auth/${plan.id}`} className="block">
                                     <Button
                                         className={`w-full ${plan.is_featured ? 'bg-primary hover:bg-primary/90' : ''}`}
                                         variant={plan.is_featured ? 'default' : 'outline'}

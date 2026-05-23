@@ -22,6 +22,8 @@ import {
   FilterState,
 } from "@/components/client/requests/ServiceRequestFilters";
 import { LatestRequestPopup } from "@/components/client/requests/LatestRequestPopup";
+import KYCGateBanner from "@/components/client/KYCGateBanner";
+import { useKYCStatus } from "@/hooks/useKYCStatus";
 
 // SERVICE TYPES
 const SERVICES = [
@@ -158,6 +160,7 @@ export default function ServiceRequestsPage() {
   const [dismissedUpdates, setDismissedUpdates] = useState<string[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { kycSubmitted, checking } = useKYCStatus();
 
   useEffect(() => {
     const load = async () => {
@@ -266,6 +269,12 @@ export default function ServiceRequestsPage() {
 
   return (
     <div className="container mx-auto max-w-7xl animate-in fade-in-50 duration-500">
+      {/* KYC Gate Banner */}
+      {!checking && kycSubmitted === false && (
+        <div className="mb-6">
+          <KYCGateBanner context="service" />
+        </div>
+      )}
       {/* Latest Request Popup */}
       {showPopup && newUpdates.length > 0 && (
         <LatestRequestPopup

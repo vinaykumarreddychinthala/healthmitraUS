@@ -40,6 +40,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { createServiceRequest } from "@/app/actions/service-requests";
+import type { ServiceRequestContext } from '@/components/client/services/PlanPolicySelector';
 
 // Terms Modal Component
 function TermsModal({
@@ -341,6 +342,7 @@ interface ServiceRequestFormProps {
   userProfile?: any;
   vouchers?: { code: string; value: number; description: string }[];
   allowedServices?: string[];
+  serviceContext?: ServiceRequestContext;  // Plan + Policy Holder context from wizard
 }
 
 const NEARBY_HOSPITALS = [
@@ -383,6 +385,7 @@ export function ServiceRequestForm({
   userProfile,
   vouchers = [],
   allowedServices = [],
+  serviceContext,
 }: ServiceRequestFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -403,17 +406,22 @@ export function ServiceRequestForm({
   const fallbackType = hasAccess ? allowedServices[0] : "medical_consultation";
   const defaultType = isRequestedTypeAllowed ? requestedType : fallbackType;
 
+  // Pre-fill patient name from policy holder
+  const policyHolderName = serviceContext?.policyHolder?.holderFullName || '';
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       type: defaultType,
-      memberId: "Myself",
+      memberId: serviceContext?.policyHolder?.memberId || "Myself",
       agreedToTerms: false,
       collectionType: "home",
       ambulanceType: "bls",
       urgency: "scheduled",
       consultationType: "video",
       isFasting: "no",
+      // Pre-fill patient name from policy holder
+      patientName: policyHolderName,
     },
   });
 
@@ -495,7 +503,16 @@ export function ServiceRequestForm({
       const result = await createServiceRequest({
         type: data.type,
         memberId: data.memberId,
-        details: { ...data, agreedToTerms: undefined },
+        details: {
+          ...data,
+          agreedToTerms: undefined,
+          // Embed plan + policy holder context for admin visibility
+          plan_id: serviceContext?.plan?.planId,
+          plan_name: serviceContext?.plan?.planName,
+          card_unique_id: serviceContext?.plan?.cardUniqueId,
+          policy_holder_name: serviceContext?.policyHolder?.holderFullName,
+          policy_holder_relation: serviceContext?.policyHolder?.relation,
+        },
       });
 
       if (result.success) {
@@ -584,24 +601,19 @@ export function ServiceRequestForm({
               </Select>
             </div>
 
-            {/* Member Selection */}
-            <div className="space-y-2">
-              <Label>Select Member</Label>
-              <Select
-                onValueChange={(val) => form.setValue("memberId", val)}
-                defaultValue="Myself"
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Member" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Myself">Myself (Self)</SelectItem>
-                  <SelectItem value="Spouse">Spouse</SelectItem>
-                  <SelectItem value="Child">Child</SelectItem>
-                  <SelectItem value="Parent">Parent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Member Selection — replaced by PlanPolicySelector wizard */}
+            {/* Policy Holder is now pre-selected in the wizard step before the form */}
+            {serviceContext && (
+              <div className="space-y-1">
+                <Label className="text-slate-600">Policy Holder</Label>
+                <div className="flex items-center gap-2 h-10 px-4 rounded-xl border border-teal-200 bg-teal-50 text-sm">
+                  <User className="h-4 w-4 text-teal-600 shrink-0" />
+                  <span className="font-semibold text-teal-800">{serviceContext.policyHolder.holderFullName}</span>
+                  <span className="text-teal-600">({serviceContext.policyHolder.relation})</span>
+                  <span className="ml-auto text-xs text-teal-500">Pre-filled ✓</span>
+                </div>
+              </div>
+            )}
 
           {/* ===== AMBULANCE SERVICE ===== */}
           {watchType === "ambulance" && (

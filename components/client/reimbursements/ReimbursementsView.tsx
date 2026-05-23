@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { FileText, Activity, Search, Filter, X, ChevronDown, Download, CheckCircle, XCircle, Clock, RefreshCw, Wallet, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import KYCGateBanner from '@/components/client/KYCGateBanner';
+import { useKYCStatus } from '@/hooks/useKYCStatus';
 
 interface ReimbursementsViewProps {
     initialClaims: any[];
@@ -29,6 +31,7 @@ type StatusFilter = 'approved' | 'rejected' | 'pending' | 'under_review';
 
 export function ReimbursementsView({ initialClaims }: ReimbursementsViewProps) {
     const claims = initialClaims || [];
+    const { kycSubmitted, checking } = useKYCStatus();
 
     const [selectedStatuses, setSelectedStatuses] = useState<StatusFilter[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -125,6 +128,10 @@ export function ReimbursementsView({ initialClaims }: ReimbursementsViewProps) {
 
     return (
         <div className="space-y-6 pb-10">
+            {/* KYC Gate Banner */}
+            {!checking && kycSubmitted === false && (
+                <KYCGateBanner context="service" />
+            )}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">Reimbursements</h1>

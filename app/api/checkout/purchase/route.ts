@@ -30,6 +30,8 @@ const paymentReceiptTemplate = ({
 const welcomeTemplate = ({
   name,
   email,
+  userId,
+  password,
   planName,
   amount,
   transactionId
@@ -44,11 +46,11 @@ const welcomeTemplate = ({
   <p><strong>Transaction ID:</strong> ${transactionId}</p>
   <p><strong>Amount:</strong> $${amount}</p>
 
-  <p>Your login details:</p>
-  <ul>
-    <li>User ID: ${email}</li>
-    <li>Password: (set/reset via forgot password)</li>
-  </ul>
+  <p>Your login details to access the Customer Panel:</p>
+  <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 10px 0;">
+    <p style="margin: 0 0 10px 0;"><strong>User ID:</strong> ${userId || email}</p>
+    <p style="margin: 0;"><strong>Password:</strong> ${password || '(Use your existing password)'}</p>
+  </div>
 
   <p>Please download your temporary e-card from your dashboard.</p>
 
@@ -166,6 +168,36 @@ export async function POST(request: Request) {
             console.error('Profile upsert error:', err);
         }
 
+        // Check if first time user (no existing memberships)
+        const { data: existingMembers } = await adminClient
+            .from('ecard_members')
+            .select('id')
+            .eq('user_id', user.id)
+            .limit(1);
+        
+        const isFirstTimeUser = !existingMembers || existingMembers.length === 0;
+
+        let generatedUserId = '';
+        let generatedPassword = '';
+        
+        if (isFirstTimeUser) {
+            // Generate HM-XXXXXX
+            const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+            generatedUserId = `HM-${randomCode}`;
+            
+            // Generate 8 char password
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
+            for (let i = 0; i < 8; i++) {
+                generatedPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+
+            // Update user's password in Supabase Auth
+            await adminClient.auth.admin.updateUserById(user.id, { password: generatedPassword });
+        } else {
+            // For existing users, just generate a standard card ID, they already have a password
+            generatedUserId = `HM${Date.now()}${crypto.randomUUID().replace(/-/g,'').slice(0,6).toUpperCase()}`;
+        }
+
         // Create membership record — use admin client to bypass RLS
         const { data: member, error: memberError } = await adminClient
             .from('ecard_members')
@@ -178,7 +210,7 @@ export async function POST(request: Request) {
                 valid_from: startDate.toISOString().split('T')[0],
                 valid_till: expiryDate.toISOString().split('T')[0],
                 coverage_amount: plan.coverage_amount || plan.price * 100,
-                card_unique_id: `HM${Date.now()}${crypto.randomUUID().replace(/-/g,'').slice(0,9).toUpperCase()}`,
+                card_unique_id: generatedUserId,
             })
             .select()
             .single();
@@ -268,6 +300,8 @@ export async function POST(request: Request) {
         html: welcomeTemplate({
             name,
             email: user.email,
+            userId: isFirstTimeUser ? generatedUserId : null,
+            password: isFirstTimeUser ? generatedPassword : null,
             planName: plan.name,
             amount: totalAmount,
             transactionId
@@ -285,6 +319,7 @@ export async function POST(request: Request) {
                 expiryDate: expiryDate.toISOString(),
                 transactionId,
                 isTestMode,
+                isFirstTimeUser,
             }
         });
     } catch (error: any) {

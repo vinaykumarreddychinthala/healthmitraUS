@@ -9,8 +9,34 @@ import { planPurchaseWelcomeTemplate } from "@/lib/email-templates";
 export async function login(formData: FormData) {
   const supabase = await createClient();
 
-  const email = formData.get("email") as string;
+  let email = formData.get("email") as string;
   const password = formData.get("password") as string;
+
+  // If the input doesn't look like an email, assume it's a User ID (e.g. HM-XXXXXX)
+  if (!email.includes("@")) {
+    const adminClient = await createAdminClient();
+    
+    // First lookup in ecard_members to find the user_id
+    const { data: member } = await adminClient
+      .from('ecard_members')
+      .select('user_id')
+      .eq('card_unique_id', email)
+      .limit(1)
+      .single();
+      
+    if (member?.user_id) {
+        // Then get the email from profiles
+        const { data: profile } = await adminClient
+          .from('profiles')
+          .select('email')
+          .eq('id', member.user_id)
+          .single();
+          
+        if (profile?.email) {
+            email = profile.email;
+        }
+    }
+  }
 
   const { data: authData, error } = await supabase.auth.signInWithPassword({
     email,
@@ -182,124 +208,7 @@ export async function login(formData: FormData) {
 //   return { success: true, redirect: redirectPath };
 // }
 
-export async function signup(formData: FormData) {
-  let supabase;
-  let isAdmin = false;
 
-  try {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
-    }
-    supabase = await createAdminClient();
-    isAdmin = true;
-  } catch (e) {
-    console.warn("Falling back to normal signup:", e);
-    supabase = await createClient();
-  }
-
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const fullName = formData.get("fullName") as string;
-  const phone = (formData.get("phone") as string) || "";
-
-  console.log("SIGNUP DATA:", { email, fullName, phone });
-
-  let error;
-  let userId: string | null = null;
-
-  if (isAdmin) {
-    // ✅ Admin signup (no email verification)
-    const result = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: fullName,
-        phone: phone,
-      },
-    });
-
-    error = result.error;
-
-    if (!error && result.data?.user) {
-      userId = result.data.user.id;
-    }
-  } else {
-    // ✅ Normal signup
-    const result = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          phone: phone,
-        },
-      },
-    });
-
-    error = result.error;
-
-    if (!error && result.data?.user) {
-      userId = result.data.user.id;
-    }
-  }
-
-  if (error) {
-    console.error("Signup Error:", error.message);
-    return { error: error.message };
-  }
-
-  // ✅ Create profile ONLY ONCE (no trigger conflict)
-  if (userId) {
-    try {
-      const adminClient = await createAdminClient();
-
-      const { error: profileError } = await adminClient
-        .from("profiles")
-        .insert({
-          id: userId,
-          email: email,
-          full_name: fullName,
-          phone: phone,
-          role: "customer",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-
-      if (profileError) {
-        console.error("Profile creation error:", profileError);
-      } else {
-        // Send Welcome Email
-        try {
-          await sendMail({
-            to: email,
-            subject: 'Welcome to HealthMitra!',
-            html: planPurchaseWelcomeTemplate({
-              customerName: fullName,
-              userId: email,
-              password: password,
-              planName: 'HealthMitra Membership',
-              transactionId: 'N/A',
-              amount: '0'
-            })
-          });
-        } catch (emailErr) {
-          console.error("Failed to send welcome email:", emailErr);
-        }
-      }
-    } catch (e) {
-      console.error("Admin client error:", e);
-    }
-  }
-
-  revalidatePath("/", "layout");
-
-  // ✅ IMPORTANT: no auto login
-  return {
-    success: true,
-    redirect: "/login?message=Account created successfully. Please login.",
-  };
-}
 
 export async function signout() {
   const supabase = await createClient();

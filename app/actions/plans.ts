@@ -41,10 +41,10 @@ export async function getPlans(filters?: {
         totalPrice: p.price,
         status: p.status,
         planImage: p.image_url,
-        validityType: 'year', // Default for now
+        validityType: 'year',
         validityValue: p.duration_days ? Math.round(p.duration_days / 365) : 1,
-        memberCountMin: 1,
-        memberCountMax: 4,
+        memberCountMin: p.member_count_min ?? 1,
+        memberCountMax: p.member_count_max ?? 1,
         categoryIds: p.category_ids || [],
         allowed_services: p.allowed_services || [],
         services: p.features ? p.features.map((f: string, i: number) => ({ id: `f_${i}`, name: f, status: 'enabled' })) : [],
@@ -76,8 +76,8 @@ export async function getPlan(id: string) {
         planImage: data.image_url,
         validityType: 'year',
         validityValue: data.duration_days ? Math.round(data.duration_days / 365) : 1,
-        memberCountMin: 1,
-        memberCountMax: 4,
+        memberCountMin: data.member_count_min ?? 1,
+        memberCountMax: data.member_count_max ?? 1,
         categoryIds: data.category_ids || [],
         allowed_services: data.allowed_services || [],
         services: data.features ? data.features.map((f: string, i: number) => ({ id: `f_${i}`, name: f, status: 'enabled' })) : [],
@@ -101,12 +101,14 @@ export async function createPlan(data: Partial<Plan>) {
         features: data.services?.map(s => s.name),
         category_ids: data.categoryIds || [],
         allowed_services: data.allowed_services || [],
-        duration_days: (data.validityValue || 1) * 365,
+        duration_days: (data.validityValue || 1) * (data.validityType === 'month' ? 30 : 365),
         type: data.type,
         status: planStatus,
         is_active: planStatus === 'active',
         is_featured: data.isFeatured,
-        image_url: data.planImage
+        image_url: data.planImage,
+        member_count_min: data.memberCountMin ?? 1,
+        member_count_max: data.memberCountMax ?? 1,
     });
 
     if (error) return { success: false, error: error.message };
@@ -128,7 +130,9 @@ export async function updatePlan(id: string, data: Partial<Plan>) {
         is_active: planStatus === 'active',
         is_featured: data.isFeatured,
         image_url: data.planImage,
-        type: data.type
+        type: data.type,
+        member_count_min: data.memberCountMin ?? 1,
+        member_count_max: data.memberCountMax ?? 1,
     }).eq('id', id);
 
     if (error) return { success: false, error: error.message };
