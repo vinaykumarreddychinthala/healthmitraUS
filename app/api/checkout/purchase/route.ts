@@ -220,7 +220,46 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: false, error: 'Failed to create membership: ' + memberError.message }, { status: 500 });
         }
 
+        // -----------------------------------------------------------------------
+        // Insert into `customers` table (plan buyer record)
+        // -----------------------------------------------------------------------
+        await adminClient.from('customers').insert({
+            user_id: user.id,
+            email: user.email!,
+            full_name: user.email?.split('@')[0] || 'User',
+            plan_id: planId,
+            plan_name: plan.name,
+            card_unique_id: generatedUserId,
+            amount_paid: finalAmount,
+            currency: 'USD',
+            payment_method: paymentMethod,
+            transaction_id: transactionId,
+            valid_from: startDate.toISOString().split('T')[0],
+            valid_till: expiryDate.toISOString().split('T')[0],
+            status: 'active',
+        });
+
+        // Mark any OTP verification records for this email as converted (they bought a plan)
+        if (user.email) {
+            await adminClient
+                .from('otp_verifications')
+                .update({ converted: true, updated_at: new Date().toISOString() })
+                .eq('email', user.email)
+                .eq('converted', false);
+        }
+
+        // Ensure the `users` table has this person linked to their auth account
+        // (they may have verified via OTP before, or this could be their first entry)
+        await adminClient.from('users').upsert({
+            email: user.email!,
+            user_id: user.id,
+            source: 'checkout',
+            verified_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'email', ignoreDuplicates: false });
+
         // Create payment record — use admin client
+
         // Generate unique order ID to avoid UNIQUE constraint violation
         const orderId = razorpayOrderId || `manual_${Date.now()}_${user.id.slice(0, 8)}`;
         await adminClient.from('payments').insert({

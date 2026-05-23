@@ -543,6 +543,18 @@ export default function EditPlanPage({ params }: { params: Promise<{ id: string 
                                 <Switch checked={plan.showOnWebsite || false} onCheckedChange={c => updatePlanData({ showOnWebsite: c })} />
                             </div>
 
+                            {plan.showOnWebsite && (
+                                <div className="space-y-4 p-6 bg-slate-50 border border-slate-200 rounded-xl">
+                                    <div className="space-y-2">
+                                        <Label>URL Slug</Label>
+                                        <div className="flex bg-white border border-slate-200 rounded-md overflow-hidden">
+                                            <div className="px-3 py-2 bg-slate-100 text-slate-500 text-sm border-r border-slate-200">healthmitraus.com/plans/</div>
+                                            <Input className="border-0 bg-transparent focus-visible:ring-0 text-slate-900" placeholder="gold-plan-2025" value={plan.slug || ''} onChange={e => updatePlanData({ slug: e.target.value })} />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg">
                                 <div>
                                     <Label className="text-base text-slate-800">Featured Plan</Label>

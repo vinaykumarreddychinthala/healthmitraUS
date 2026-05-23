@@ -46,8 +46,23 @@ async function trackOTPVerification({ email, name, phone, planId }: {
     const now = new Date().toISOString();
     const logEntry = { verified_at: now, plan_id: planId || null, plan_name: planName };
 
-    // Upsert: if same email+plan already exists, increment count and append to log
-    // If email exists with a different plan, insert a new row
+    // -----------------------------------------------------------------------
+    // 1. Upsert into `users` table — every verified person gets a row here.
+    //    user_id stays NULL until they purchase a plan (auth account created then).
+    // -----------------------------------------------------------------------
+    await adminClient.from('users').upsert({
+        email,
+        name: name || null,
+        phone: phone || null,
+        interested_plan_id: planId || null,
+        source: 'otp_verify',
+        verified_at: now,
+        updated_at: now,
+    }, { onConflict: 'email', ignoreDuplicates: false });
+
+    // -----------------------------------------------------------------------
+    // 2. Track in otp_verifications (existing analytics / admin visibility)
+    // -----------------------------------------------------------------------
     const { data: existing } = await adminClient
         .from('otp_verifications')
         .select('id, verify_count, verify_log, converted')

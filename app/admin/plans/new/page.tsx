@@ -290,7 +290,16 @@ export default function CreatePlanWizard() {
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <Label>Plan Name *</Label>
-                                    <Input value={plan.name} onChange={e => updatePlan({ name: e.target.value })} placeholder="e.g. Gold Health Plan" className="bg-white border-slate-200 text-slate-900" />
+                                    <Input 
+                                        value={plan.name} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            const generatedSlug = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+                                            updatePlan({ name: val, slug: generatedSlug });
+                                        }} 
+                                        placeholder="e.g. Gold Health Plan" 
+                                        className="bg-white border-slate-200 text-slate-900" 
+                                    />
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Plan Type *</Label>

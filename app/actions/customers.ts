@@ -287,7 +287,7 @@ export async function resetCustomerPassword(userId: string, newPassword: string)
     return { success: true, message: 'Password reset successfully' };
 }
 
-// --- GET CUSTOMERS WITH PLAN INFO ---
+// --- GET CUSTOMERS WITH PLAN INFO (from dedicated customers table) ---
 export async function getCustomers(filters?: {
     query?: string;
     planId?: string;
@@ -303,127 +303,69 @@ export async function getCustomers(filters?: {
     const to = from + limit - 1;
 
     let query = adminSupabase
-        .from('profiles')
-        .select('*', { count: 'exact' })
-        .eq('role', 'user');
+        .from('customers')
+        .select('*, plans(name)', { count: 'exact' });
 
     if (filters?.query) {
-        query = query.or(`full_name.ilike.%${filters.query}%,email.ilike.%${filters.query}%,phone.ilike.%${filters.query}%`);
+        query = query.or(
+            `full_name.ilike.%${filters.query}%,email.ilike.%${filters.query}%,phone.ilike.%${filters.query}%`
+        );
     }
 
     if (filters?.status && filters.status !== 'all') {
         query = query.eq('status', filters.status);
     }
 
+    if (filters?.planId && filters.planId !== 'all') {
+        if (filters.planId === 'none') {
+            query = query.is('plan_id', null);
+        } else {
+            query = query.eq('plan_id', filters.planId);
+        }
+    }
+
     query = query.range(from, to).order('created_at', { ascending: false });
 
-    const { data: profiles, error, count } = await query;
+    const { data, error, count } = await query;
     if (error) return { success: false, error: error.message };
 
-    // Get total count (without pagination) for accurate total
-    let totalCount = count || 0;
-    if (!filters?.planId) {
-        const { count: fullCount } = await adminSupabase
-            .from('profiles')
-            .select('*', { count: 'exact', head: true })
-            .eq('role', 'user');
-        totalCount = fullCount || 0;
-    }
+    const customers = (data || []).map((c: any) => ({
+        id: c.id,
+        userId: c.user_id,
+        fullName: c.full_name || 'Unknown',
+        email: c.email,
+        phone: c.phone,
+        planId: c.plan_id,
+        planName: c.plan_name || c.plans?.name || null,
+        memberId: c.member_id_code,
+        cardUniqueId: c.card_unique_id,
+        amountPaid: c.amount_paid,
+        paymentMethod: c.payment_method,
+        transactionId: c.transaction_id,
+        validFrom: c.valid_from,
+        validTill: c.valid_till,
+        status: c.status || 'active',
+        createdAt: c.created_at,
+    }));
 
-    // Get e-card members (self) for each profile to get plan info
-    const userIds = profiles.map((p: any) => p.id);
-
-    let ecardData: any[] = [];
-    if (userIds.length > 0) {
-        const { data: ecards } = await adminSupabase
-            .from('ecard_members')
-            .select('user_id, plan_id, member_id_code, card_unique_id, valid_from, valid_till, status')
-            .in('user_id', userIds)
-            .eq('relation', 'Self')
-            .order('created_at', { ascending: false });
-
-        if (ecards) ecardData = ecards;
-    }
-
-    // Get plan names
-    const planIds = [...new Set(ecardData.map((e: any) => e.plan_id).filter(Boolean))];
-    let planMap: Record<string, string> = {};
-
-    if (planIds.length > 0) {
-        const { data: plans } = await adminSupabase
-            .from('plans')
-            .select('id, name')
-            .in('id', planIds);
-
-        if (plans) {
-            plans.forEach((p: any) => { planMap[p.id] = p.name; });
-        }
-    }
-
-    // Build ecard map by user_id (most recent)
-    const ecardMap: Record<string, any> = {};
-    ecardData.forEach((e: any) => {
-        if (!ecardMap[e.user_id]) ecardMap[e.user_id] = e;
-    });
-
-    const customers = profiles.map((p: any) => {
-        const ecard = ecardMap[p.id];
-        return {
-            id: p.id,
-            fullName: p.full_name || 'Unknown',
-            email: p.email,
-            phone: p.phone,
-            status: p.status || 'active',
-            city: p.city,
-            state: p.state,
-            createdAt: p.created_at,
-            memberId: ecard?.member_id_code || null,
-            cardUniqueId: ecard?.card_unique_id || null,
-            planId: ecard?.plan_id || null,
-            planName: ecard?.plan_id ? (planMap[ecard.plan_id] || 'Unknown Plan') : null,
-            planStatus: ecard?.status || null,
-            validFrom: ecard?.valid_from || null,
-            validTill: ecard?.valid_till || null,
-        };
-    });
-
-    // Filter by planId if provided
-    let filtered = customers;
-    let finalCount = totalCount;
-    
-    if (filters?.planId) {
-        if (filters.planId === 'none') {
-            filtered = customers.filter((c: any) => !c.planId);
-        } else {
-            filtered = customers.filter((c: any) => c.planId === filters.planId);
-        }
-        // Get accurate count for filtered results
-        if (filters.planId === 'none') {
-            // Count customers without any plan
-            const { count: noPlanCount } = await adminSupabase
-                .from('ecard_members')
-                .select('user_id', { count: 'exact', head: true })
-                .eq('relation', 'Self')
-                .is('plan_id', null);
-            finalCount = noPlanCount || 0;
-        } else {
-            // Count customers with this specific plan
-            const { count: planCount } = await adminSupabase
-                .from('ecard_members')
-                .select('user_id', { count: 'exact', head: true })
-                .eq('relation', 'Self')
-                .eq('plan_id', filters.planId);
-            finalCount = planCount || 0;
-        }
-    }
-
-    return { success: true, data: filtered, totalCount: finalCount };
+    return { success: true, data: customers, totalCount: count || 0 };
 }
+
+// --- GET CUSTOMER STATS ---
+export async function getCustomerStats() {
+    const adminSupabase = await createAdminClient();
+    const { count: total }   = await adminSupabase.from('customers').select('*', { count: 'exact', head: true });
+    const { count: active }  = await adminSupabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'active');
+    const { count: expired } = await adminSupabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'expired');
+    return { total: total || 0, active: active || 0, expired: expired || 0 };
+}
+
 
 // --- GET SINGLE CUSTOMER DETAIL ---
 export async function getCustomerDetail(userId: string) {
     const adminSupabase = await createAdminClient();
 
+    // Fetch from profiles (auth account data)
     const { data: profile } = await adminSupabase
         .from('profiles')
         .select('*')
@@ -432,11 +374,26 @@ export async function getCustomerDetail(userId: string) {
 
     if (!profile) return { success: false, error: 'Customer not found' };
 
+    // Fetch from customers table (purchase records)
+    const { data: customerRecords } = await adminSupabase
+        .from('customers')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+    // Fetch ecard members (self + family)
     const { data: members } = await adminSupabase
         .from('ecard_members')
         .select('*, plans(name, price, duration_days)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-    return { success: true, data: { profile, members: members || [] } };
+    return {
+        success: true,
+        data: {
+            profile,
+            customers: customerRecords || [],   // purchase records from customers table
+            members: members || [],             // e-card members (self + family)
+        },
+    };
 }

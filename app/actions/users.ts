@@ -58,6 +58,7 @@ export async function getUsers(filters: GetUsersFilters) {
     const { count: partnerCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'franchise_owner');
     const { count: customerCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'user');
     const { count: activeCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'active');
+    const { count: potentialCount } = await supabase.from('otp_verifications').select('*', { count: 'exact', head: true }).eq('converted', false);
 
     const stats = {
         total: totalCount || 0,
@@ -66,6 +67,7 @@ export async function getUsers(filters: GetUsersFilters) {
         partners: partnerCount || 0,
         customers: customerCount || 0,
         active: activeCount || 0,
+        potential: potentialCount || 0,
     };
 
     const users: User[] = data.map((p: any) => {
@@ -92,6 +94,69 @@ export async function getUsers(filters: GetUsersFilters) {
 
     return { success: true, data: users, stats, totalCount: count || 0 };
 }
+
+// --- GET VERIFIED USERS (from the dedicated `users` table) ---
+// These are people who verified their OTP. May or may not have bought a plan.
+export async function getVerifiedUsers(filters?: {
+    query?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+}) {
+    const supabase = await createAdminClient();
+
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase
+        .from('users')
+        .select('*', { count: 'exact' });
+
+    if (filters?.query) {
+        query = query.or(`name.ilike.%${filters.query}%,email.ilike.%${filters.query}%,phone.ilike.%${filters.query}%`);
+    }
+
+    if (filters?.status && filters.status !== 'all') {
+        query = query.eq('status', filters.status);
+    }
+
+    query = query.range(from, to).order('verified_at', { ascending: false });
+
+    const { data, error, count } = await query;
+    if (error) return { success: false, error: error.message };
+
+    const users = (data || []).map((u: any) => ({
+        id: u.id,
+        userId: u.user_id,     // null until they purchase
+        name: u.name || 'Unknown',
+        email: u.email,
+        phone: u.phone,
+        interestedPlanId: u.interested_plan_id,
+        hasPurchased: !!u.user_id,  // true if linked to auth account
+        source: u.source,
+        status: u.status,
+        verifiedAt: u.verified_at,
+        createdAt: u.created_at,
+    }));
+
+    // Stats
+    const { count: totalVerified } = await supabase.from('users').select('*', { count: 'exact', head: true });
+    const { count: totalConverted } = await supabase.from('users').select('*', { count: 'exact', head: true }).not('user_id', 'is', null);
+
+    return {
+        success: true,
+        data: users,
+        totalCount: count || 0,
+        stats: {
+            totalVerified: totalVerified || 0,
+            totalConverted: totalConverted || 0,
+            notConverted: (totalVerified || 0) - (totalConverted || 0),
+        },
+    };
+}
+
 
 export async function getUser(id: string) {
     const supabase = await createAdminClient();

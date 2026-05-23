@@ -167,8 +167,34 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: false, error: 'Failed to create membership: ' + memberError.message }, { status: 500 });
         }
 
-        // Create payment record
+        // -----------------------------------------------------------------------
+        // Insert into `customers` table (plan buyer record)
+        // -----------------------------------------------------------------------
         const finalTransactionId = transactionId || `TEST_${Date.now()}`;
+        await adminClient.from('customers').insert({
+            user_id: userId,
+            email,
+            full_name: name,
+            phone: phone || null,
+            plan_id: planId,
+            plan_name: plan.name,
+            card_unique_id: cardId,
+            amount_paid: finalAmount,
+            currency: 'USD',
+            payment_method: paymentMethod,
+            transaction_id: finalTransactionId,
+            valid_from: startDate.toISOString().split('T')[0],
+            valid_till: expiryDate.toISOString().split('T')[0],
+            status: 'active',
+        });
+
+        // Link the `users` table entry to their newly-created auth account
+        await adminClient
+            .from('users')
+            .update({ user_id: userId, updated_at: new Date().toISOString() })
+            .eq('email', email);
+
+        // Create payment record
         await adminClient.from('payments').insert({
             user_id: userId,
             plan_id: planId,

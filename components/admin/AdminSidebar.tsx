@@ -34,7 +34,6 @@ export const ADMIN_NAV_ITEMS = [
     { icon: FileText, label: 'Plans Management', href: '/admin/plans' },
     { icon: Users, label: 'User Management', href: '/admin/users' },
     { icon: UserPlus, label: 'Customer Management', href: '/admin/customers' },
-    { icon: TrendingUp, label: 'Potential Customers', href: '/admin/potential-customers' },
     { icon: MapPin, label: 'Locations', href: '/admin/locations' },
     { icon: LayoutTemplate, label: 'CMS Manager', href: '/admin/cms/pages' },
     { icon: Percent, label: 'Coupons', href: '/admin/coupons' },
