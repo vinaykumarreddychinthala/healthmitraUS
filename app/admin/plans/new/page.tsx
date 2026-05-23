@@ -453,17 +453,92 @@ export default function CreatePlanWizard() {
                             </div>
 
                             <div className="space-y-4 p-6 bg-slate-50 border border-slate-200 rounded-xl">
-                                <h3 className="text-lg font-medium text-slate-800">Member Limits</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Min Members</Label>
-                                        <Input type="number" value={plan.memberCountMin} onChange={e => updatePlan({ memberCountMin: parseInt(e.target.value) })} className="bg-white border-slate-200 text-slate-900" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Max Members</Label>
-                                        <Input type="number" value={plan.memberCountMax} onChange={e => updatePlan({ memberCountMax: parseInt(e.target.value) })} className="bg-white border-slate-200 text-slate-900" />
-                                    </div>
+                                <h3 className="text-lg font-medium text-slate-800">Member Type</h3>
+                                <p className="text-sm text-slate-500 -mt-2">Choose how many people this plan covers. Each member gets their own E-Card.</p>
+
+                                {/* Plan type selector */}
+                                <div className="grid grid-cols-2 gap-4 mt-3">
+                                    {/* Single Member */}
+                                    <button
+                                        type="button"
+                                        onClick={() => updatePlan({ memberCountMin: 1, memberCountMax: 1 })}
+                                        className={`relative flex flex-col items-center gap-3 p-5 rounded-xl border-2 transition-all text-left
+                                            ${(plan.memberCountMax ?? 1) === 1
+                                                ? 'border-teal-500 bg-teal-50 shadow-md shadow-teal-100'
+                                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                            }`}
+                                    >
+                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl
+                                            ${(plan.memberCountMax ?? 1) === 1 ? 'bg-teal-100' : 'bg-slate-100'}`}>
+                                            👤
+                                        </div>
+                                        <div>
+                                            <p className={`font-bold text-sm ${(plan.memberCountMax ?? 1) === 1 ? 'text-teal-800' : 'text-slate-700'}`}>
+                                                Single Member
+                                            </p>
+                                            <p className="text-xs text-slate-500 mt-0.5">1 E-Card · 1 Policy Holder</p>
+                                        </div>
+                                        {(plan.memberCountMax ?? 1) === 1 && (
+                                            <div className="absolute top-3 right-3 w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+                                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </button>
+
+                                    {/* Multi Member */}
+                                    <button
+                                        type="button"
+                                        onClick={() => updatePlan({ memberCountMin: 1, memberCountMax: plan.memberCountMax && plan.memberCountMax > 1 ? plan.memberCountMax : 4 })}
+                                        className={`relative flex flex-col items-center gap-3 p-5 rounded-xl border-2 transition-all text-left
+                                            ${(plan.memberCountMax ?? 1) > 1
+                                                ? 'border-blue-500 bg-blue-50 shadow-md shadow-blue-100'
+                                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                            }`}
+                                    >
+                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl
+                                            ${(plan.memberCountMax ?? 1) > 1 ? 'bg-blue-100' : 'bg-slate-100'}`}>
+                                            👨‍👩‍👧‍👦
+                                        </div>
+                                        <div>
+                                            <p className={`font-bold text-sm ${(plan.memberCountMax ?? 1) > 1 ? 'text-blue-800' : 'text-slate-700'}`}>
+                                                Multi Member
+                                            </p>
+                                            <p className="text-xs text-slate-500 mt-0.5">Multiple E-Cards · Family Plan</p>
+                                        </div>
+                                        {(plan.memberCountMax ?? 1) > 1 && (
+                                            <div className="absolute top-3 right-3 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </button>
                                 </div>
+
+                                {/* Max members input — only for multi */}
+                                {(plan.memberCountMax ?? 1) > 1 && (
+                                    <div className="mt-2 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-2 animate-in fade-in-50">
+                                        <Label className="text-blue-800 font-semibold">Maximum Members Allowed</Label>
+                                        <p className="text-xs text-blue-600">How many E-Cards can be issued under this plan? (Min: 2, Max: 20)</p>
+                                        <div className="flex items-center gap-4">
+                                            <input
+                                                type="range"
+                                                min={2} max={20}
+                                                value={plan.memberCountMax ?? 4}
+                                                onChange={e => updatePlan({ memberCountMax: parseInt(e.target.value) })}
+                                                className="flex-1 accent-blue-500"
+                                            />
+                                            <div className="w-16 h-10 flex items-center justify-center bg-white border-2 border-blue-300 rounded-xl font-bold text-blue-700 text-lg">
+                                                {plan.memberCountMax ?? 4}
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-blue-500">
+                                            Up to <strong>{plan.memberCountMax}</strong> members can be added — each gets their own E-Card after completing KYC.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Visibility Controls */}
@@ -480,7 +555,7 @@ export default function CreatePlanWizard() {
                                     <div className="space-y-2">
                                         <Label>URL Slug</Label>
                                         <div className="flex bg-white border border-slate-200 rounded-md overflow-hidden">
-                                            <div className="px-3 py-2 bg-slate-100 text-slate-500 text-sm border-r border-slate-200">healthmitra.com/plans/</div>
+                                            <div className="px-3 py-2 bg-slate-100 text-slate-500 text-sm border-r border-slate-200">healthmitraus.com/plans/</div>
                                             <Input className="border-0 bg-transparent focus-visible:ring-0 text-slate-900" placeholder="gold-plan-2025" value={plan.slug || ''} onChange={e => updatePlan({ slug: e.target.value })} />
                                         </div>
                                     </div>
@@ -591,8 +666,17 @@ export default function CreatePlanWizard() {
                                     </div>
                                     <div className="w-px bg-slate-200 h-12"></div>
                                     <div className="text-center">
-                                        <div className="text-3xl font-bold text-slate-800">{plan.memberCountMax}</div>
-                                        <div className="text-xs text-slate-500 uppercase tracking-wider">Max Members</div>
+                                        {(plan.memberCountMax ?? 1) === 1 ? (
+                                            <>
+                                                <div className="text-2xl font-bold text-teal-600">👤 Single</div>
+                                                <div className="text-xs text-slate-500 uppercase tracking-wider">1 E-Card</div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="text-2xl font-bold text-blue-600">👨‍👩‍👧‍👦 ×{plan.memberCountMax}</div>
+                                                <div className="text-xs text-slate-500 uppercase tracking-wider">Multi Member</div>
+                                            </>
+                                        )}
                                     </div>
                                     <div className="w-px bg-slate-200 h-12"></div>
                                     <div className="text-center">
