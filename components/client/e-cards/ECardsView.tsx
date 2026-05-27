@@ -50,6 +50,16 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
     // KYC status cache: memberId → boolean
     const [kycStatusMap, setKycStatusMap] = useState<Record<string, boolean | 'loading'>>({});
 
+    const openKYCModal = useCallback((card: ECardMember) => {
+        setKycModal({ open: true, memberId: card.id, memberName: card.name });
+    }, []);
+
+    const handleDownload = useCallback((card: ECardMember, type: 'download-pdf' | 'download-img') => {
+        // Placeholder for actual PDF/image generation
+        toast.success(`Downloading ${type === 'download-pdf' ? 'PDF' : 'Image'} for ${card.name}...`);
+        // TODO: Call PDF generation API
+    }, []);
+
     const checkKYCAndProceed = useCallback(async (card: ECardMember, action: 'download-pdf' | 'download-img') => {
         const cached = kycStatusMap[card.id];
 
@@ -79,21 +89,14 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
             toast.error('Failed to check KYC status. Please try again.');
             setKycStatusMap(prev => { const next = { ...prev }; delete next[card.id]; return next; });
         }
-    }, [kycStatusMap]);
-
-    const openKYCModal = (card: ECardMember) => {
-        setKycModal({ open: true, memberId: card.id, memberName: card.name });
-    };
-
-    const handleDownload = (card: ECardMember, type: 'download-pdf' | 'download-img') => {
-        // Placeholder for actual PDF/image generation
-        toast.success(`Downloading ${type === 'download-pdf' ? 'PDF' : 'Image'} for ${card.name}...`);
-        // TODO: Call PDF generation API
-    };
+    }, [kycStatusMap, handleDownload, openKYCModal]);
 
     const handleKYCSuccess = (memberId: string) => {
         setKycStatusMap(prev => ({ ...prev, [memberId]: true }));
         toast.success('KYC complete! You can now download your E-Card.');
+        setTimeout(() => {
+            window.location.reload();
+        }, 1500);
     };
 
     const handleCardSuccess = () => {
@@ -183,6 +186,7 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
                         card={card}
                         kycStatus={kycStatusMap[card.id]}
                         onDownloadClick={(type) => checkKYCAndProceed(card, type)}
+                        onCompleteKycClick={() => openKYCModal(card)}
                     />
                 ))}
             </div>

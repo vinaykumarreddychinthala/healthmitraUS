@@ -56,6 +56,47 @@ interface ValidationErrors {
     [key: string]: string;
 }
 
+// Input field component with error display
+const InputField = ({
+    label,
+    name,
+    type = 'text',
+    placeholder = '',
+    value,
+    onChange,
+    maxLength,
+    error,
+    className = ''
+}: {
+    label: string;
+    name: string;
+    type?: string;
+    placeholder?: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    maxLength?: number;
+    error?: string;
+    className?: string;
+}) => (
+    <div className={`space-y-1 ${className}`}>
+        <label className="text-xs font-semibold text-slate-500">{label} <span className="text-red-500">*</span></label>
+        <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            maxLength={maxLength}
+            placeholder={placeholder}
+            className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 ${error ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                }`}
+        />
+        {error && (
+            <p className="text-xs text-red-500 flex items-center gap-1">
+                <AlertCircle size={10} /> {error}
+            </p>
+        )}
+    </div>
+);
+
 export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availableMembers }: GenerateECardWizardProps) {
     const [step, setStep] = useState<1 | 2 | 3>(1);
     const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
@@ -213,45 +254,6 @@ export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availa
 
     const selectedMember = availableMembers.find(m => m.id === selectedMemberId);
 
-    // Input field component with error display
-    const InputField = ({
-        label,
-        name,
-        type = 'text',
-        placeholder = '',
-        value,
-        onChange,
-        maxLength,
-        className = ''
-    }: {
-        label: string;
-        name: string;
-        type?: string;
-        placeholder?: string;
-        value: string;
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-        maxLength?: number;
-        className?: string;
-    }) => (
-        <div className={`space-y-1 ${className}`}>
-            <label className="text-xs font-semibold text-slate-500">{label} <span className="text-red-500">*</span></label>
-            <input
-                type={type}
-                value={value}
-                onChange={onChange}
-                maxLength={maxLength}
-                placeholder={placeholder}
-                className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 ${errors[name] ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                    }`}
-            />
-            {errors[name] && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                    <AlertCircle size={10} /> {errors[name]}
-                </p>
-            )}
-        </div>
-    );
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -336,6 +338,7 @@ export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availa
                                     label="Full Name"
                                     name="fullName"
                                     value={formData.fullName}
+                                    error={errors.fullName}
                                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                                     placeholder={selectedMember?.name || 'Enter full name'}
                                 />
@@ -345,6 +348,7 @@ export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availa
                                     name="dob"
                                     type="date"
                                     value={formData.dob}
+                                    error={errors.dob}
                                     onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                                 />
 
@@ -385,6 +389,7 @@ export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availa
                                     name="mobile"
                                     type="tel"
                                     value={formData.mobile}
+                                    error={errors.mobile}
                                     onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                                     placeholder="+91 9876543210"
                                     maxLength={10}
@@ -395,6 +400,7 @@ export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availa
                                     name="email"
                                     type="email"
                                     value={formData.email}
+                                    error={errors.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                     placeholder="priya@email.com"
                                 />
@@ -409,6 +415,7 @@ export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availa
                                     name="height"
                                     type="number"
                                     value={formData.height}
+                                    error={errors.height}
                                     onChange={(e) => setFormData({ ...formData, height: e.target.value })}
                                     placeholder="165"
                                 />
@@ -418,6 +425,7 @@ export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availa
                                     name="weight"
                                     type="number"
                                     value={formData.weight}
+                                    error={errors.weight}
                                     onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
                                     placeholder="58"
                                 />
@@ -477,6 +485,7 @@ export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availa
                                     label="City"
                                     name="city"
                                     value={formData.city}
+                                    error={errors.city}
                                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                                     placeholder="Ahmedabad"
                                 />
@@ -502,6 +511,7 @@ export default function GenerateECardWizard({ isOpen, onClose, onSuccess, availa
                                     name="pincode"
                                     type="text"
                                     value={formData.pincode}
+                                    error={errors.pincode}
                                     onChange={(e) => setFormData({ ...formData, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) })}
                                     placeholder="380001"
                                     maxLength={6}

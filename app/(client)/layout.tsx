@@ -3,6 +3,7 @@ import { BottomNav } from "@/components/client/BottomNav";
 import { DashboardHeader } from "@/components/client/DashboardHeader";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 export default async function ClientLayout({
     children,
@@ -21,6 +22,39 @@ export default async function ClientLayout({
         .select('*')
         .eq('id', user.id)
         .single();
+
+    const isAdmin = profile?.role === 'admin';
+
+    if (!isAdmin) {
+        const today = new Date().toISOString().split('T')[0];
+        const { data: members } = await supabase
+            .from('ecard_members')
+            .select('id')
+            .eq('user_id', user.id)
+            .gte('valid_till', today);
+
+        if (!members || members.length === 0) {
+            redirect("/api/auth/expired-signout");
+        }
+
+        const memberIds = members.map(m => m.id);
+        const { data: kycRecords } = await supabase
+            .from('policy_holder_kyc')
+            .select('member_id')
+            .eq('kyc_submitted', true)
+            .eq('admin_reset', false)
+            .in('member_id', memberIds);
+
+        const completedKycIds = new Set((kycRecords || []).map(k => k.member_id));
+        const pendingKycCount = memberIds.filter(id => !completedKycIds.has(id)).length;
+
+        const headersList = await headers();
+        const pathname = headersList.get('x-pathname') || '';
+
+        if (pendingKycCount > 0 && pathname !== '/e-cards') {
+            redirect('/e-cards');
+        }
+    }
 
     // User data for header
     const userData = {

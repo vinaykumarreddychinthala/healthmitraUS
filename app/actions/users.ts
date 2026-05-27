@@ -457,3 +457,37 @@ export async function deleteDepartment(id: string) {
     if (error) return { success: false, error: error.message };
     return { success: true, message: 'Department deleted' };
 }
+
+export async function getUserPolicyMembers(userId: string) {
+    const adminSupabase = await createAdminClient();
+    try {
+        const { data, error } = await adminSupabase
+            .from('ecard_members')
+            .select(`
+                id, 
+                full_name, 
+                relation, 
+                status, 
+                card_unique_id,
+                policy_holder_kyc (
+                    id,
+                    kyc_submitted,
+                    admin_verified,
+                    admin_verified_at,
+                    photo_url,
+                    aadhaar_number,
+                    aadhaar_declaration,
+                    aadhaar_file_url,
+                    pan_number,
+                    pan_declaration,
+                    pan_file_url
+                )
+            `)
+            .eq('user_id', userId);
+
+        if (error) throw error;
+        return { success: true, data };
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
+}

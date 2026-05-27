@@ -54,8 +54,15 @@ function LoginFormContent() {
           </div>
         )}
         {message && !purchased && (
-          <div className="mt-4 p-3 bg-green-50 text-green-600 text-sm rounded-lg border border-green-100">
-            {message}
+          <div className={`mt-4 p-3 text-sm rounded-xl border text-left ${
+            searchParams.get("expired") === 'true'
+              ? 'bg-red-50 text-red-700 border-red-200'
+              : 'bg-green-50 text-green-600 border-green-100'
+          }`}>
+            {searchParams.get("expired") === 'true' && (
+              <p className="font-bold text-red-800 flex items-center gap-2 mb-0.5">⚠️ Access Blocked</p>
+            )}
+            <p>{message}</p>
           </div>
         )}
       </div>

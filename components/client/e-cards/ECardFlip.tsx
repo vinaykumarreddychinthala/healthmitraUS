@@ -2,16 +2,17 @@
 
 import React, { useState } from 'react';
 import { ECardMember } from '@/types/ecard';
-import { Download, Share2, Wallet, RefreshCw, Smartphone, Mail, Clock, Shield, Phone, Globe, ChevronRight, QrCode, CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
+import { Download, Share2, Wallet, RefreshCw, Smartphone, Mail, Clock, Shield, Phone, Globe, ChevronRight, QrCode, CheckCircle, ShieldAlert, Loader2, User, Lock } from 'lucide-react';
 import EmailECardModal from './EmailECardModal';
 
 interface ECardFlipProps {
     card: ECardMember;
     kycStatus?: boolean | 'loading';
     onDownloadClick?: (type: 'download-pdf' | 'download-img') => void;
+    onCompleteKycClick?: () => void;
 }
 
-export default function ECardFlip({ card, kycStatus, onDownloadClick }: ECardFlipProps) {
+export default function ECardFlip({ card, kycStatus, onDownloadClick, onCompleteKycClick }: ECardFlipProps) {
     const [isFlipped, setIsFlipped] = useState(false);
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
@@ -20,26 +21,29 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick }: ECardFli
         return (
             <div className="w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
                 <div className="p-8 flex flex-col items-center text-center space-y-4">
-                    <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center text-3xl">
-                        ⏳
+                    <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center text-amber-500">
+                        <Clock size={32} />
                     </div>
                     <div>
                         <h3 className="text-xl font-bold text-slate-800">CARD GENERATION PENDING</h3>
                         <p className="text-slate-500 mt-2 text-sm max-w-xs mx-auto">
-                            Please complete ALL member details to generate your E-Card
+                            Please complete member details and submit KYC documents to generate this E-Card
                         </p>
                     </div>
 
-                    <div className="w-full bg-slate-50 p-4 rounded-xl mt-4 border border-slate-100">
+                    <div className="w-full bg-slate-50 p-4 rounded-xl mt-2 border border-slate-100">
                         <div className="text-sm text-left space-y-1">
-                            <p><span className="text-slate-500">Member:</span> <span className="font-semibold text-slate-700">{card.name} ({card.relation})</span></p>
+                            <p><span className="text-slate-500">Member:</span> <span className="font-semibold text-slate-700">{card.name || 'Unassigned'} ({card.relation})</span></p>
                             <p><span className="text-slate-500">Plan:</span> <span className="font-semibold text-slate-700">{card.planName}</span></p>
                         </div>
                     </div>
 
-                    <div className="w-full bg-amber-50 p-3 rounded-lg border border-amber-200 text-left">
-                        <p className="text-xs text-amber-700 font-medium">⚠️ Required: Name, DOB, Gender, Blood Group, Mobile, Email, Aadhaar, PAN, Address, City, State, Pincode</p>
-                    </div>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onCompleteKycClick?.(); }}
+                        className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2.5 rounded-xl font-semibold text-sm transition-colors mt-2"
+                    >
+                        Complete KYC & Activate Card
+                    </button>
                 </div>
             </div>
         );
@@ -73,9 +77,15 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick }: ECardFli
                                 <h3 className="font-bold text-xl tracking-wide">HEALTHMITRA</h3>
                                 <p className="text-xs text-teal-100 opacity-90 mt-0.5">Your Health, Our Priority</p>
                             </div>
-                            <span className="text-xs font-bold px-3 py-1.5 bg-green-400 text-green-900 rounded-full shadow-lg flex items-center gap-1">
-                                <CheckCircle size={12} /> Active
-                            </span>
+                            {card.adminVerified ? (
+                                <span className="text-xs font-bold px-3 py-1.5 bg-green-400 text-green-900 rounded-full shadow-lg flex items-center gap-1">
+                                    <CheckCircle size={12} /> Active
+                                </span>
+                            ) : (
+                                <span className="text-xs font-bold px-3 py-1.5 bg-orange-400 text-orange-900 rounded-full shadow-lg flex items-center gap-1">
+                                    <ShieldAlert size={12} /> Verification Pending
+                                </span>
+                            )}
                         </div>
 
                         {/* Member Details */}
@@ -84,7 +94,7 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick }: ECardFli
                                 {card.photoUrl ? (
                                     <img src={card.photoUrl} alt={card.name} className="w-full h-full object-cover rounded-xl" />
                                 ) : (
-                                    <span className="text-3xl">👤</span>
+                                    <User size={32} className="text-white/50" />
                                 )}
                             </div>
                             <div className="flex-1">
@@ -267,10 +277,17 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick }: ECardFli
                                 <p>Policy No: <span className="text-slate-700 font-medium">{card.policyNo}</span></p>
                                 <p>Issued By: <span className="text-slate-700 font-medium">HealthMitra Insurance Services</span></p>
                             </div>
-                            <div className="flex items-center gap-1 text-teal-600 bg-teal-50 px-2 py-1 rounded-lg">
-                                <Shield size={14} />
-                                <span className="font-semibold">Verified</span>
-                            </div>
+                            {card.adminVerified ? (
+                                <div className="flex items-center gap-1 text-teal-600 bg-teal-50 px-2 py-1 rounded-lg">
+                                    <Shield size={14} />
+                                    <span className="font-semibold">Verified</span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-1 text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">
+                                    <ShieldAlert size={14} />
+                                    <span className="font-semibold">Pending Verification</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Tap to Flip Back Indicator */}
@@ -292,7 +309,7 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick }: ECardFli
                     title={kycStatus === true ? 'Download PDF' : 'Complete KYC to download'}
                 >
                     {kycStatus === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                    {kycStatus === true ? 'PDF' : kycStatus === 'loading' ? '...' : '🔒 PDF'}
+                    {kycStatus === true ? 'PDF' : kycStatus === 'loading' ? '...' : <span className="flex items-center gap-1"><Lock size={12} /> PDF</span>}
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); onDownloadClick?.('download-img'); }}
@@ -300,7 +317,7 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick }: ECardFli
                     title={kycStatus === true ? 'Download Image' : 'Complete KYC to download'}
                 >
                     {kycStatus === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <Smartphone size={14} />}
-                    {kycStatus === true ? 'Image' : kycStatus === 'loading' ? '...' : '🔒 Img'}
+                    {kycStatus === true ? 'Image' : kycStatus === 'loading' ? '...' : <span className="flex items-center gap-1"><Lock size={12} /> Img</span>}
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); setIsFlipped(!isFlipped); }}
@@ -310,9 +327,11 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick }: ECardFli
                 </button>
                 <button
                     onClick={(e) => e.stopPropagation()}
-                    className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors col-span-1"
+                    className={`flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium rounded-xl transition-colors col-span-1 ${card.adminVerified ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-slate-50 text-slate-400 cursor-not-allowed'}`}
+                    disabled={!card.adminVerified}
+                    title={card.adminVerified ? 'Wallet' : 'Wallet restricted until KYC is verified'}
                 >
-                    <Wallet size={14} /> Wallet
+                    {card.adminVerified ? <Wallet size={14} /> : <Lock size={12} />} Wallet
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); setIsEmailModalOpen(true); }}

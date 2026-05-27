@@ -63,6 +63,28 @@ export async function login(formData: FormData) {
       revalidatePath("/", "layout");
       return { success: true, redirect: "/admin/dashboard" };
     }
+
+    // For customers, check if they have any active members/plans
+    const { data: allMembers, error: membersError } = await adminClient
+      .from('ecard_members')
+      .select('id, valid_till')
+      .eq('user_id', authData.user.id);
+
+    if (membersError) {
+      console.error("Error fetching member plans:", membersError);
+    }
+
+    if (!allMembers || allMembers.length === 0) {
+      await supabase.auth.signOut();
+      return { error: "No active plan found. Please go and buy a plan." };
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const hasActivePlan = allMembers.some(m => m.valid_till && m.valid_till >= today);
+    if (!hasActivePlan) {
+      await supabase.auth.signOut();
+      return { error: "Your plan has expired. Please go and buy the plan again." };
+    }
   }
 
   revalidatePath("/", "layout");

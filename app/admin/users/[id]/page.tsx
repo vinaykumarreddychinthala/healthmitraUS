@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, use } from 'react';
 import { User } from '@/types/user';
-import { getUser, toggleUserStatus, changePlan, resendCredentials, activateNewPlan, getDepartments, updateUser } from '@/app/actions/users';
+import { getUser, toggleUserStatus, changePlan, resendCredentials, activateNewPlan, getDepartments, updateUser, getUserPolicyMembers } from '@/app/actions/users';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,6 +59,9 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
     });
     const [saving, setSaving] = useState(false);
 
+    const [policyMembers, setPolicyMembers] = useState<any[]>([]);
+    const [loadingMembers, setLoadingMembers] = useState(false);
+
     useEffect(() => {
         const load = async () => {
             setLoading(true);
@@ -90,6 +93,18 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
             }
         };
         load();
+    }, [id]);
+
+    useEffect(() => {
+        const loadMembers = async () => {
+            setLoadingMembers(true);
+            const res = await getUserPolicyMembers(id);
+            if (res.success && res.data) {
+                setPolicyMembers(res.data);
+            }
+            setLoadingMembers(false);
+        };
+        loadMembers();
     }, [id]);
 
     const handleEditToggle = () => {
@@ -256,7 +271,8 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                     {/* @ts-ignore */}
                     <TabsTrigger value="bank" className="data-[state=active]:bg-white data-[state=active]:text-teal-700">Bank Details</TabsTrigger>
                     {/* @ts-ignore */}
-                    <TabsTrigger value="documents" className="data-[state=active]:bg-white data-[state=active]:text-teal-700">Documents</TabsTrigger>
+                    <TabsTrigger value="documents" className="data-[state=active]:bg-white data-[state=active]:text-teal-700">My KYC</TabsTrigger>
+                    <TabsTrigger value="policy_kyc" className="data-[state=active]:bg-white data-[state=active]:text-teal-700">Policy Members KYC</TabsTrigger>
                     <TabsTrigger value="activity" className="data-[state=active]:bg-white data-[state=active]:text-teal-700">Activity</TabsTrigger>
                     <TabsTrigger value="actions" className="data-[state=active]:bg-white data-[state=active]:text-teal-700">Admin Actions</TabsTrigger>
                 </TabsList>
@@ -411,6 +427,92 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* POLICY MEMBERS KYC TAB */}
+                <TabsContent value="policy_kyc" className="mt-6 space-y-6">
+                    {loadingMembers ? (
+                        <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-teal-500" /></div>
+                    ) : policyMembers.length === 0 ? (
+                        <Card className="bg-white border-slate-200 shadow-sm"><CardContent className="py-10 text-center text-slate-400">No policy members found.</CardContent></Card>
+                    ) : (
+                        policyMembers.map((member: any) => {
+                            const kycArray = Array.isArray(member.policy_holder_kyc) ? member.policy_holder_kyc : (member.policy_holder_kyc ? [member.policy_holder_kyc] : []);
+                            const kyc = kycArray[0] || null;
+                            const isSubmitted = kyc?.kyc_submitted;
+                            const isVerified = kyc?.admin_verified;
+                            
+                            return (
+                            <Card key={member.id} className="bg-white border-slate-200 shadow-sm">
+                                <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                                    <div>
+                                        <CardTitle className="text-base text-slate-700">{member.full_name || 'Pending Name'} ({member.relation})</CardTitle>
+                                        <p className="text-xs text-slate-500 mt-1">E-Card Status: <Badge variant="outline" className="text-[10px] ml-1">{member.status}</Badge></p>
+                                    </div>
+                                    <Badge className={`text-xs border ${isVerified ? 'bg-emerald-100 text-emerald-700' : (isSubmitted ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500')}`}>
+                                        {isVerified ? 'Verified' : (isSubmitted ? 'Pending Admin' : 'Not Submitted')}
+                                    </Badge>
+                                </CardHeader>
+                                <CardContent>
+                                    {kyc ? (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <Row label="Aadhaar" value={kyc.aadhaar_declaration ? 'Self-Declared' : (kyc.aadhaar_number || 'N/A')} />
+                                                <Row label="PAN" value={kyc.pan_declaration ? 'Self-Declared' : (kyc.pan_number || 'N/A')} />
+                                            </div>
+                                            {kyc.photo_url && (
+                                                <div className="mt-2">
+                                                    <span className="text-sm text-slate-500 block mb-2">Photo Document</span>
+                                                    <a href={kyc.photo_url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline text-sm flex items-center gap-1">
+                                                        <Eye className="h-4 w-4" /> View Document
+                                                    </a>
+                                                </div>
+                                            )}
+                                            {kyc.aadhaar_file_url && (
+                                                <div className="mt-2">
+                                                    <span className="text-sm text-slate-500 block mb-2">Aadhaar Document</span>
+                                                    <a href={kyc.aadhaar_file_url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline text-sm flex items-center gap-1">
+                                                        <Eye className="h-4 w-4" /> View Document
+                                                    </a>
+                                                </div>
+                                            )}
+                                            {kyc.pan_file_url && (
+                                                <div className="mt-2">
+                                                    <span className="text-sm text-slate-500 block mb-2">PAN Document</span>
+                                                    <a href={kyc.pan_file_url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline text-sm flex items-center gap-1">
+                                                        <Eye className="h-4 w-4" /> View Document
+                                                    </a>
+                                                </div>
+                                            )}
+                                            {!isVerified && isSubmitted && (
+                                                <div className="mt-4 pt-4 border-t border-slate-100">
+                                                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={async () => {
+                                                        const res = await fetch(`/api/admin/kyc/${member.id}/verify`, { method: 'POST' });
+                                                        if (res.ok) {
+                                                            toast.success('KYC Verified');
+                                                            setPolicyMembers(prev => prev.map(p => {
+                                                                if (p.id === member.id) {
+                                                                    const updatedKyc = { ...kyc, admin_verified: true };
+                                                                    return { ...p, policy_holder_kyc: [updatedKyc] };
+                                                                }
+                                                                return p;
+                                                            }));
+                                                        } else {
+                                                            toast.error('Failed to verify');
+                                                        }
+                                                    }}>
+                                                        <Shield className="h-4 w-4 mr-2" /> Approve Verification
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-slate-500">KYC has not been submitted by this member yet.</p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )})
+                    )}
                 </TabsContent>
 
                 {/* ACTIVITY TAB */}

@@ -234,9 +234,9 @@ function TermsModal({
           onScroll={handleScroll}
         >
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-            <p className="text-amber-800 text-xs">
-              ⚠️ Please read carefully. These terms affect your legal rights.
-              Last updated: January 15, 2024
+            <p className="text-amber-800 text-xs flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              <span>Please read carefully. These terms affect your legal rights. Last updated: January 15, 2024</span>
             </p>
           </div>
 
@@ -530,11 +530,11 @@ export function ServiceRequestForm({
 
   const getTitle = () => {
     const titles: Record<string, string> = {
-      ambulance: "🚑 Book Ambulance Service",
-      medical_consultation: "👨‍⚕️ Doctor Appointment",
-      diagnostic: "🔬 Book Diagnostic Test",
-      caretaker: "🤝 Caretaker Services",
-      nursing: "🏥 Nursing Procedures",
+      ambulance: "Book Ambulance Service",
+      medical_consultation: "Doctor Appointment",
+      diagnostic: "Book Diagnostic Test",
+      caretaker: "Caretaker Services",
+      nursing: "Nursing Procedures",
     };
     return titles[watchType] || "Service Request";
   };
@@ -592,11 +592,11 @@ export function ServiceRequestForm({
                   <SelectValue placeholder="Select Service" />
                 </SelectTrigger>
                 <SelectContent>
-                  {allowedServices.includes("ambulance") && <SelectItem value="ambulance">🚑 Ambulance Service</SelectItem>}
-                  {allowedServices.includes("medical_consultation") && <SelectItem value="medical_consultation">👨‍⚕️ Doctor Appointment</SelectItem>}
-                  {allowedServices.includes("diagnostic") && <SelectItem value="diagnostic">🔬 Diagnostic Test</SelectItem>}
-                  {allowedServices.includes("caretaker") && <SelectItem value="caretaker">🤝 Caretaker Services</SelectItem>}
-                  {allowedServices.includes("nursing") && <SelectItem value="nursing">🏥 Nursing Procedures</SelectItem>}
+                  {allowedServices.includes("ambulance") && <SelectItem value="ambulance">Ambulance Service</SelectItem>}
+                  {allowedServices.includes("medical_consultation") && <SelectItem value="medical_consultation">Doctor Appointment</SelectItem>}
+                  {allowedServices.includes("diagnostic") && <SelectItem value="diagnostic">Diagnostic Test</SelectItem>}
+                  {allowedServices.includes("caretaker") && <SelectItem value="caretaker">Caretaker Services</SelectItem>}
+                  {allowedServices.includes("nursing") && <SelectItem value="nursing">Nursing Procedures</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -630,7 +630,7 @@ export function ServiceRequestForm({
                       htmlFor="urgent"
                       className="text-red-700 font-semibold cursor-pointer"
                     >
-                      🚨 Immediate (Emergency) - Dispatch within 2 minutes
+                      Immediate (Emergency) - Dispatch within 2 minutes
                     </Label>
                   </div>
                   <div className="flex items-center space-x-3 p-3 rounded-lg border border-slate-200">
@@ -850,11 +850,11 @@ export function ServiceRequestForm({
                 >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="video" id="video" />
-                    <Label htmlFor="video">📹 Video Call</Label>
+                    <Label htmlFor="video">Video Call</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="inperson" id="inperson" />
-                    <Label htmlFor="inperson">🏥 In-Person</Label>
+                    <Label htmlFor="inperson">In-Person</Label>
                   </div>
                 </RadioGroup>
               </div>

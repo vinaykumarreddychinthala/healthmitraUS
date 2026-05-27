@@ -154,9 +154,25 @@ export default function CreatePlanWizard() {
 
     const updatePlan = (updates: Partial<Plan>) => {
         setPlan(prev => {
-            const updated = { ...prev, ...updates };
-            if (updates.basePrice !== undefined || updates.gstPercent !== undefined) {
-                const base = updates.basePrice ?? prev.basePrice ?? 0;
+            const sanitizedUpdates = { ...updates };
+            if (updates.basePrice !== undefined && Number.isNaN(updates.basePrice)) {
+                sanitizedUpdates.basePrice = undefined;
+            }
+            if (updates.gstPercent !== undefined && Number.isNaN(updates.gstPercent)) {
+                sanitizedUpdates.gstPercent = undefined;
+            }
+            if (updates.validityValue !== undefined && Number.isNaN(updates.validityValue)) {
+                sanitizedUpdates.validityValue = undefined;
+            }
+            if (updates.extraValidity !== undefined && Number.isNaN(updates.extraValidity)) {
+                sanitizedUpdates.extraValidity = undefined;
+            }
+
+            const updated = { ...prev, ...sanitizedUpdates };
+            if (sanitizedUpdates.basePrice !== undefined || sanitizedUpdates.gstPercent !== undefined) {
+                const base = (sanitizedUpdates.basePrice === undefined || Number.isNaN(sanitizedUpdates.basePrice))
+                    ? 0
+                    : sanitizedUpdates.basePrice;
                 const gst = 0;
                 updated.totalPrice = base;
             }
@@ -379,11 +395,27 @@ export default function CreatePlanWizard() {
                             <div className="grid grid-cols-3 gap-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
                                 <div className="space-y-2">
                                     <Label>Base Price ($) *</Label>
-                                    <Input type="number" value={plan.basePrice} onChange={e => updatePlan({ basePrice: parseFloat(e.target.value) })} className="bg-white border-slate-200 text-slate-900" />
+                                    <Input 
+                                        type="number" 
+                                        value={plan.basePrice === undefined || Number.isNaN(plan.basePrice) ? '' : plan.basePrice} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            updatePlan({ basePrice: val === '' ? undefined : parseFloat(val) });
+                                        }} 
+                                        className="bg-white border-slate-200 text-slate-900" 
+                                    />
                                 </div>
                                 {/* <div className="space-y-2">
                                     <Label>GST (%)</Label>
-                                    <Input type="number" value={plan.gstPercent} onChange={e => updatePlan({ gstPercent: parseFloat(e.target.value) })} className="bg-white border-slate-200 text-slate-900" />
+                                    <Input 
+                                        type="number" 
+                                        value={plan.gstPercent === undefined || Number.isNaN(plan.gstPercent) ? '' : plan.gstPercent} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            updatePlan({ gstPercent: val === '' ? undefined : parseFloat(val) });
+                                        }} 
+                                        className="bg-white border-slate-200 text-slate-900" 
+                                    />
                                 </div> */}
                                 <div className="space-y-2">
                                     <Label className="text-teal-600">Total Price (Auto)</Label>
@@ -443,7 +475,15 @@ export default function CreatePlanWizard() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Value</Label>
-                                        <Input type="number" value={plan.validityValue} onChange={e => updatePlan({ validityValue: parseInt(e.target.value) })} className="bg-white border-slate-200 text-slate-900" />
+                                        <Input 
+                                            type="number" 
+                                            value={plan.validityValue === undefined || Number.isNaN(plan.validityValue) ? '' : plan.validityValue} 
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                updatePlan({ validityValue: val === '' ? undefined : parseInt(val) });
+                                            }} 
+                                            className="bg-white border-slate-200 text-slate-900" 
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -454,8 +494,11 @@ export default function CreatePlanWizard() {
                                 <p className="text-xs text-teal-500 mb-2">Optional bonus validity period added on top of the main plan duration</p>
                                 <Input
                                     type="number"
-                                    value={plan.extraValidity || 0}
-                                    onChange={e => updatePlan({ extraValidity: parseInt(e.target.value) || 0 })}
+                                    value={plan.extraValidity === undefined || Number.isNaN(plan.extraValidity) ? '' : plan.extraValidity}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        updatePlan({ extraValidity: val === '' ? undefined : parseInt(val) });
+                                    }}
                                     placeholder="0"
                                     className="bg-white border-teal-200 text-slate-900 max-w-[200px]"
                                 />

@@ -185,9 +185,9 @@ export async function POST(request: Request) {
             .insert({
                 user_id: user.id,
                 plan_id: planId,
-                full_name: user.email?.split('@')[0] || 'User',
+                full_name: '',
                 relation: 'Self',
-                status: 'active',
+                status: 'pending',
                 valid_from: startDate.toISOString().split('T')[0],
                 valid_till: expiryDate.toISOString().split('T')[0],
                 coverage_amount: plan.coverage_amount || plan.price * 100,
@@ -197,6 +197,31 @@ export async function POST(request: Request) {
 
         if (memberError) {
             return NextResponse.json({ success: false, error: 'Failed to create membership: ' + memberError.message }, { status: 500 });
+        }
+
+        // Auto-populate family members if multi-member plan
+        const maxMembers = plan.member_count_max || 1;
+        if (maxMembers > 1) {
+            const familyMembersToInsert = [];
+            for (let i = 1; i < maxMembers; i++) {
+                const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+                const familyCardId = `HM-${randomCode}`;
+                familyMembersToInsert.push({
+                    user_id: user.id,
+                    plan_id: planId,
+                    full_name: '',
+                    relation: `Family Member ${i}`,
+                    status: 'pending',
+                    valid_from: startDate.toISOString().split('T')[0],
+                    valid_till: expiryDate.toISOString().split('T')[0],
+                    coverage_amount: plan.coverage_amount || plan.price * 100,
+                    card_unique_id: familyCardId,
+                });
+            }
+            const { error: familyError } = await adminClient.from('ecard_members').insert(familyMembersToInsert);
+            if (familyError) {
+                console.error('PayPal checkout family members pre-population error:', familyError);
+            }
         }
 
         // Create payment record — use admin client

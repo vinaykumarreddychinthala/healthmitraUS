@@ -199,7 +199,7 @@ export async function getPatients(query?: string) {
 
     // Get record counts for all members
     const memberIds = data.map((m: any) => m.id);
-    let recordCounts: Record<string, number> = {};
+    const recordCounts: Record<string, number> = {};
     
     if (memberIds.length > 0) {
         const { data: records } = await supabase

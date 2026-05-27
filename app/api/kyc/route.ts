@@ -18,16 +18,28 @@ export async function POST(request: Request) {
         const panNumber         = formData.get('panNumber') as string | null;
         const panDeclaration    = formData.get('panDeclaration') === 'true';
         const photoFile         = formData.get('photo') as File | null;
+        const aadhaarFile       = formData.get('aadhaarFile') as File | null;
+        const panFile           = formData.get('panFile') as File | null;
 
         // --- Validations ---
         if (!memberId || !holderFullName || !relation) {
             return NextResponse.json({ success: false, error: 'Full name, relation, and member ID are required' }, { status: 400 });
         }
-        if (!aadhaarDeclaration && (!aadhaarNumber || aadhaarNumber.replace(/\D/g, '').length !== 12)) {
-            return NextResponse.json({ success: false, error: 'Valid 12-digit Aadhaar number is required, or check the declaration box' }, { status: 400 });
+        if (!aadhaarDeclaration) {
+            if (!aadhaarNumber || aadhaarNumber.replace(/\D/g, '').length !== 12) {
+                return NextResponse.json({ success: false, error: 'Valid 12-digit Aadhaar number is required, or check the declaration box' }, { status: 400 });
+            }
+            if (!aadhaarFile || aadhaarFile.size === 0) {
+                return NextResponse.json({ success: false, error: 'Aadhaar document file is required, or check the declaration box' }, { status: 400 });
+            }
         }
-        if (!panDeclaration && (!panNumber || panNumber.length !== 10)) {
-            return NextResponse.json({ success: false, error: 'Valid 10-character PAN number is required, or check the declaration box' }, { status: 400 });
+        if (!panDeclaration) {
+            if (!panNumber || panNumber.length !== 10) {
+                return NextResponse.json({ success: false, error: 'Valid 10-character PAN number is required, or check the declaration box' }, { status: 400 });
+            }
+            if (!panFile || panFile.size === 0) {
+                return NextResponse.json({ success: false, error: 'PAN document file is required, or check the declaration box' }, { status: 400 });
+            }
         }
         if (!photoFile || photoFile.size === 0) {
             return NextResponse.json({ success: false, error: 'Photo is required' }, { status: 400 });
@@ -95,6 +107,30 @@ export async function POST(request: Request) {
         }
 
         const { data: { publicUrl } } = adminClient.storage.from('member-photos').getPublicUrl(photoPath);
+        // Helper function for uploading files
+        const uploadDoc = async (file: File | null, prefix: string) => {
+            if (!file) return { url: null, path: null };
+            const ext = file.type === 'application/pdf' ? 'pdf' : file.type === 'image/png' ? 'png' : 'jpg';
+            const path = `${user.id}/${memberId}/${prefix}_${Date.now()}.${ext}`;
+            const buffer = Buffer.from(await file.arrayBuffer());
+            
+            const { error } = await adminClient.storage.from('member-photos').upload(path, buffer, { contentType: file.type, upsert: true });
+            if (error) throw new Error(`Failed to upload ${prefix}`);
+            
+            const { data: { publicUrl } } = adminClient.storage.from('member-photos').getPublicUrl(path);
+            return { url: publicUrl, path };
+        };
+
+        let aadhaarUpload = { url: null as string | null, path: null as string | null };
+        let panUpload = { url: null as string | null, path: null as string | null };
+
+        try {
+            if (aadhaarFile && !aadhaarDeclaration) aadhaarUpload = await uploadDoc(aadhaarFile, 'aadhaar');
+            if (panFile && !panDeclaration) panUpload = await uploadDoc(panFile, 'pan');
+        } catch (uploadErr: any) {
+            return NextResponse.json({ success: false, error: uploadErr.message }, { status: 500 });
+        }
+
         const now = new Date().toISOString();
 
         // Upsert KYC record
@@ -105,8 +141,12 @@ export async function POST(request: Request) {
             relation,
             aadhaar_number: aadhaarDeclaration ? null : aadhaarNumber?.replace(/\s/g, '') || null,
             aadhaar_declaration: aadhaarDeclaration,
+            aadhaar_file_url: aadhaarUpload.url,
+            aadhaar_file_path: aadhaarUpload.path,
             pan_number: panDeclaration ? null : panNumber?.toUpperCase() || null,
             pan_declaration: panDeclaration,
+            pan_file_url: panUpload.url,
+            pan_file_path: panUpload.path,
             photo_url: publicUrl,
             photo_path: photoPath,
             kyc_submitted: true,
@@ -119,6 +159,20 @@ export async function POST(request: Request) {
             await adminClient.from('policy_holder_kyc').update(kycPayload).eq('id', existingKyc.id);
         } else {
             await adminClient.from('policy_holder_kyc').insert({ ...kycPayload, created_at: now });
+        }
+
+        // Update the corresponding ecard_members record
+        const { error: memberUpdateError } = await adminClient
+            .from('ecard_members')
+            .update({
+                full_name: holderFullName.trim(),
+                relation: relation,
+                status: 'active'
+            })
+            .eq('id', memberId);
+
+        if (memberUpdateError) {
+            console.error('Failed to update ecard_members on KYC submit:', memberUpdateError);
         }
 
         return NextResponse.json({ success: true, message: 'KYC submitted successfully. You can now download your E-Card.' });

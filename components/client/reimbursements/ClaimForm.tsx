@@ -8,9 +8,10 @@ import { createClaim } from '@/lib/api/client';
 
 interface ClaimFormProps {
     userProfile: any;
+    policyMembers?: any[];
 }
 
-export default function ClaimForm({ userProfile }: ClaimFormProps) {
+export default function ClaimForm({ userProfile, policyMembers }: ClaimFormProps) {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
@@ -22,20 +23,34 @@ export default function ClaimForm({ userProfile }: ClaimFormProps) {
         files: [] as File[]
     });
 
+    const selectedMember = (policyMembers || []).find(m => m.id === formData.patientName);
+    const kycArray = selectedMember ? (Array.isArray(selectedMember.policy_holder_kyc) ? selectedMember.policy_holder_kyc : (selectedMember.policy_holder_kyc ? [selectedMember.policy_holder_kyc] : [])) : [];
+    const kyc = kycArray[0] || null;
+    const isKycVerified = selectedMember ? !!kyc?.admin_verified : true;
+    const isKycSubmitted = selectedMember ? !!kyc?.kyc_submitted : false;
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (selectedMember && !isKycVerified) {
+            toast.error('Reimbursement Locked', {
+                description: 'You cannot submit a claim for this member until their E-Card KYC is verified.'
+            });
+            return;
+        }
         setIsSubmitting(true);
 
         try {
             // Map form data to DB schema
             const claimData = {
                 type: 'medical_reimbursement', // Default type or add selector
-                patient_name: formData.patientName,
+                patient_name: selectedMember ? (selectedMember.full_name || selectedMember.relation) : formData.patientName,
                 hospital_name: formData.hospitalName,
                 treatment_date: formData.treatmentDate,
                 amount: parseFloat(formData.amount),
                 diagnosis: formData.diagnosis,
                 status: 'pending',
+                plan_id: selectedMember?.plan_id || null,
+                plan_name: selectedMember?.plan_name || null,
                 created_at: new Date().toISOString()
             };
 
@@ -71,14 +86,31 @@ export default function ClaimForm({ userProfile }: ClaimFormProps) {
                         <label className="text-sm font-medium text-slate-700">Patient Name *</label>
                         <select
                             required
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all text-slate-800"
                             value={formData.patientName}
                             onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
                         >
                             <option value="">Select Patient</option>
-                            <option value={userProfile?.full_name || 'Myself'}>{userProfile?.full_name || 'Myself'} (Self)</option>
-                            {/* Future: Map dependents here */}
+                            {(!policyMembers || policyMembers.length === 0) ? (
+                                <option value={userProfile?.full_name || 'Myself'}>{userProfile?.full_name || 'Myself'} (Self)</option>
+                            ) : (
+                                policyMembers.map((member: any) => (
+                                    <option key={member.id} value={member.id}>
+                                        {member.full_name || `Card Slot (${member.relation})`} ({member.relation})
+                                    </option>
+                                ))
+                            )}
                         </select>
+                        {selectedMember && !isKycVerified && (
+                            <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs space-y-1">
+                                <p className="font-bold flex items-center gap-1">⚠️ Reimbursement Locked</p>
+                                <p>
+                                    {isKycSubmitted 
+                                        ? "KYC has been submitted for this member but is still Pending Admin Verification. Claims can only be processed once verified."
+                                        : "KYC has not been submitted for this member. Please complete their KYC details under the E-Cards page before requesting a refund."}
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-2">
@@ -151,8 +183,8 @@ export default function ClaimForm({ userProfile }: ClaimFormProps) {
                 </button>
                 <button
                     type="submit"
-                    disabled={isSubmitting}
-                    className="px-6 py-2.5 bg-teal-600 text-white rounded-xl font-medium shadow-lg shadow-teal-200 hover:bg-teal-700 transition-all flex items-center gap-2"
+                    disabled={isSubmitting || (selectedMember && !isKycVerified)}
+                    className="px-6 py-2.5 bg-teal-600 text-white rounded-xl font-medium shadow-lg shadow-teal-200 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
                 >
                     {isSubmitting ? 'Submitting...' : 'Submit Claim'}
                     {!isSubmitting && <CheckCircle size={18} />}

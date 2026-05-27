@@ -21,6 +21,7 @@ export interface ECardMember {
     coverageAmount?: number;
     status: ECardStatus;
     cardUniqueId: string;
+    adminVerified?: boolean;
     planDescription?: string;
     planFeatures?: string[];
     aadhaarLast4?: string;

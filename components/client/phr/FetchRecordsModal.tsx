@@ -14,11 +14,9 @@ export default function FetchRecordsModal({ isOpen, onClose }: FetchRecordsModal
     const [hasSearched, setHasSearched] = useState(false);
     const [isFetching, setIsFetching] = useState(false);
     const [selectedRecords, setSelectedRecords] = useState<string[]>([]); // record IDs
+    const [foundRecords, setFoundRecords] = useState<{ id: string; type: string; date: string }[]>([]);
 
     if (!isOpen) return null;
-
-    // Records found via ABDM/ABHA API search - empty until real integration
-    const [foundRecords, setFoundRecords] = useState<{ id: string; type: string; date: string }[]>([]);
 
     const handleSearch = async () => {
         if (!search) return;

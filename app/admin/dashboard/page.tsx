@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,38 @@ interface DashboardData {
     customerGrowth: Array<{ name: string; customers: number }>;
 }
 
+const getRelativeTime = (dateStr: string) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHrs = Math.floor(diffMin / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    const diffDays = Math.floor(diffHrs / 24);
+    return `${diffDays}d ago`;
+};
+
+const MetricCard = ({ title, value, subtitle, icon: Icon, color, href }: any) => (
+    <Link href={href || '#'}>
+        <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer">
+            <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                        <p className="text-sm font-medium text-slate-500">{title}</p>
+                        <h3 className="text-2xl font-bold text-slate-800 mt-1">{value}</h3>
+                        {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
+                    </div>
+                    <div className={`p-2.5 rounded-lg ${color}`}>
+                        <Icon className="h-5 w-5" />
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    </Link>
+);
+
 export default function AdminDashboard() {
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -49,11 +81,7 @@ export default function AdminDashboard() {
     const [creatingUser, setCreatingUser] = useState(false);
     const [newUser, setNewUser] = useState({ full_name: '', email: '', phone: '', role: 'user', password: '' });
 
-    useEffect(() => {
-        loadDashboardData();
-    }, []);
-
-    const loadDashboardData = async () => {
+    const loadDashboardData = useCallback(async () => {
         setLoading(true);
         try {
             const result = await getAdminDashboardData();
@@ -70,20 +98,11 @@ export default function AdminDashboard() {
             console.error('Error loading dashboard:', error);
         }
         setLoading(false);
-    };
+    }, []);
 
-    const getRelativeTime = (dateStr: string) => {
-        const now = new Date();
-        const date = new Date(dateStr);
-        const diffMs = now.getTime() - date.getTime();
-        const diffMin = Math.floor(diffMs / 60000);
-        if (diffMin < 1) return 'Just now';
-        if (diffMin < 60) return `${diffMin}m ago`;
-        const diffHrs = Math.floor(diffMin / 60);
-        if (diffHrs < 24) return `${diffHrs}h ago`;
-        const diffDays = Math.floor(diffHrs / 24);
-        return `${diffDays}d ago`;
-    };
+    useEffect(() => {
+        loadDashboardData();
+    }, [loadDashboardData]);
 
     const handleCreateUser = async () => {
         if (!newUser.full_name || !newUser.email || !newUser.password) {
@@ -127,25 +146,6 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-center h-96">
             <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
         </div>
-    );
-
-    const MetricCard = ({ title, value, subtitle, icon: Icon, color, href }: any) => (
-        <Link href={href || '#'}>
-            <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer">
-                <CardContent className="p-5">
-                    <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-500">{title}</p>
-                            <h3 className="text-2xl font-bold text-slate-800 mt-1">{value}</h3>
-                            {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
-                        </div>
-                        <div className={`p-2.5 rounded-lg ${color}`}>
-                            <Icon className="h-5 w-5" />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-        </Link>
     );
 
     return (

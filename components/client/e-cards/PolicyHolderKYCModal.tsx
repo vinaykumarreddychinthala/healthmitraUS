@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,15 +35,17 @@ export default function PolicyHolderKYCModal({
 }: PolicyHolderKYCModalProps) {
     const [step, setStep] = useState(1);
     const [submitting, setSubmitting] = useState(false);
-    const fileRef = useRef<HTMLInputElement>(null);
 
     // Form state
     const [holderFullName, setHolderFullName] = useState('');
     const [relation, setRelation] = useState('');
     const [aadhaarNumber, setAadhaarNumber] = useState('');
     const [aadhaarDeclaration, setAadhaarDeclaration] = useState(false);
+    const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
+
     const [panNumber, setPanNumber] = useState('');
     const [panDeclaration, setPanDeclaration] = useState(false);
+    const [panFile, setPanFile] = useState<File | null>(null);
     const [photo, setPhoto] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
@@ -63,17 +65,32 @@ export default function PolicyHolderKYCModal({
     };
 
     const canProceedStep1 = holderFullName.trim().length >= 2 && relation !== '';
-    const canProceedStep2 = (aadhaarDeclaration || aadhaarNumber.replace(/\D/g, '').length === 12)
-        && (panDeclaration || panNumber.length === 10);
+    const canProceedStep2 = (aadhaarDeclaration || (aadhaarNumber.replace(/\D/g, '').length === 12 && aadhaarFile)) 
+        && (panDeclaration || (panNumber.length === 10 && panFile));
     const canProceedStep3 = photo !== null;
 
     const handleNext = () => {
         if (step === 1 && !canProceedStep1) { toast.error('Please fill in your full name and relation'); return; }
         if (step === 2 && !canProceedStep2) {
-            if (!aadhaarDeclaration && aadhaarNumber.replace(/\D/g, '').length !== 12) {
-                toast.error('Enter a valid 12-digit Aadhaar number or check the declaration box');
-            } else {
-                toast.error('Enter a valid 10-character PAN number or check the declaration box');
+            if (!aadhaarDeclaration) {
+                if (aadhaarNumber.replace(/\D/g, '').length !== 12) {
+                    toast.error('Please enter a valid 12-digit Aadhaar number');
+                    return;
+                }
+                if (!aadhaarFile) {
+                    toast.error('Please upload your Aadhaar document');
+                    return;
+                }
+            }
+            if (!panDeclaration) {
+                if (panNumber.length !== 10) {
+                    toast.error('Please enter a valid 10-character PAN number');
+                    return;
+                }
+                if (!panFile) {
+                    toast.error('Please upload your PAN document');
+                    return;
+                }
             }
             return;
         }
@@ -90,9 +107,12 @@ export default function PolicyHolderKYCModal({
             formData.append('holderFullName', holderFullName.trim());
             formData.append('relation', relation);
             formData.append('aadhaarNumber', aadhaarNumber.replace(/\D/g, ''));
-            formData.append('aadhaarDeclaration', String(aadhaarDeclaration));
-            formData.append('panNumber', panNumber.toUpperCase());
-            formData.append('panDeclaration', String(panDeclaration));
+            formData.append('aadhaarDeclaration', aadhaarDeclaration.toString());
+            if (aadhaarFile) formData.append('aadhaarFile', aadhaarFile);
+            
+            formData.append('panNumber', panNumber);
+            formData.append('panDeclaration', panDeclaration.toString());
+            if (panFile) formData.append('panFile', panFile);
             formData.append('photo', photo);
 
             const res = await fetch('/api/kyc', { method: 'POST', body: formData });
@@ -201,11 +221,40 @@ export default function PolicyHolderKYCModal({
                                         maxLength={14}
                                     />
                                 </div>
+                                <div className="space-y-2 pt-2">
+                                    <Label className="text-slate-600 text-xs">Aadhaar Document Upload <span className="text-red-500">*</span></Label>
+                                    <div className={`flex items-center justify-between border rounded-lg p-2 ${aadhaarDeclaration ? 'bg-slate-50 opacity-50' : 'bg-white'}`}>
+                                        <span className="text-xs text-slate-500 truncate max-w-[200px]">{aadhaarFile ? aadhaarFile.name : 'No file selected'}</span>
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            size="sm" 
+                                            disabled={aadhaarDeclaration} 
+                                            className="h-7 text-xs cursor-pointer"
+                                            asChild
+                                        >
+                                            <label>
+                                                Choose File
+                                                <input 
+                                                    type="file" 
+                                                    className="hidden" 
+                                                    accept="image/jpeg,image/png,application/pdf" 
+                                                    onChange={e => e.target.files && setAadhaarFile(e.target.files[0])} 
+                                                    disabled={aadhaarDeclaration} 
+                                                />
+                                            </label>
+                                        </Button>
+                                    </div>
+                                </div>
                                 <div className="flex items-start gap-2.5 pt-1">
                                     <Checkbox
                                         id="aadhaarDecl"
                                         checked={aadhaarDeclaration}
-                                        onCheckedChange={(v) => { setAadhaarDeclaration(!!v); setAadhaarNumber(''); }}
+                                        onCheckedChange={(v) => { 
+                                            setAadhaarDeclaration(!!v); 
+                                            setAadhaarNumber(''); 
+                                            setAadhaarFile(null);
+                                        }}
                                     />
                                     <label htmlFor="aadhaarDecl" className="text-xs text-slate-600 leading-snug cursor-pointer">
                                         <strong>I hereby declare</strong> that I do not possess an Aadhaar card and take full responsibility for this declaration.
@@ -227,11 +276,40 @@ export default function PolicyHolderKYCModal({
                                         maxLength={10}
                                     />
                                 </div>
+                                <div className="space-y-2 pt-2">
+                                    <Label className="text-slate-600 text-xs">PAN Document Upload <span className="text-red-500">*</span></Label>
+                                    <div className={`flex items-center justify-between border rounded-lg p-2 ${panDeclaration ? 'bg-slate-50 opacity-50' : 'bg-white'}`}>
+                                        <span className="text-xs text-slate-500 truncate max-w-[200px]">{panFile ? panFile.name : 'No file selected'}</span>
+                                        <Button 
+                                            type="button" 
+                                            variant="outline" 
+                                            size="sm" 
+                                            disabled={panDeclaration} 
+                                            className="h-7 text-xs cursor-pointer"
+                                            asChild
+                                        >
+                                            <label>
+                                                Choose File
+                                                <input 
+                                                    type="file" 
+                                                    className="hidden" 
+                                                    accept="image/jpeg,image/png,application/pdf" 
+                                                    onChange={e => e.target.files && setPanFile(e.target.files[0])} 
+                                                    disabled={panDeclaration} 
+                                                />
+                                            </label>
+                                        </Button>
+                                    </div>
+                                </div>
                                 <div className="flex items-start gap-2.5 pt-1">
                                     <Checkbox
                                         id="panDecl"
                                         checked={panDeclaration}
-                                        onCheckedChange={(v) => { setPanDeclaration(!!v); setPanNumber(''); }}
+                                        onCheckedChange={(v) => { 
+                                            setPanDeclaration(!!v); 
+                                            setPanNumber(''); 
+                                            setPanFile(null);
+                                        }}
                                     />
                                     <label htmlFor="panDecl" className="text-xs text-slate-600 leading-snug cursor-pointer">
                                         <strong>I hereby declare</strong> that I do not possess a PAN card and take full responsibility for this declaration.
@@ -244,9 +322,8 @@ export default function PolicyHolderKYCModal({
                     {/* Step 3: Photo Upload */}
                     {step === 3 && (
                         <div className="space-y-4">
-                            <div
-                                onClick={() => fileRef.current?.click()}
-                                className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50/50 transition-all group"
+                            <label
+                                className="block border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50/50 transition-all group"
                             >
                                 {photoPreview ? (
                                     <div className="space-y-3">
@@ -274,13 +351,12 @@ export default function PolicyHolderKYCModal({
                                     </div>
                                 )}
                                 <input
-                                    ref={fileRef}
                                     type="file"
                                     accept="image/jpeg,image/jpg,image/png,application/pdf"
                                     className="hidden"
                                     onChange={handlePhotoChange}
                                 />
-                            </div>
+                            </label>
                             <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
                                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                                 <span>Upload a recent passport-size photo (JPEG/PNG) or a scanned document (PDF). Max size 2MB. This photo will appear on your E-Card.</span>

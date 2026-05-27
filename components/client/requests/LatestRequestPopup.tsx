@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Bell, ChevronRight, Clock } from 'lucide-react';
 import Link from 'next/link';
 
@@ -24,21 +24,21 @@ export function LatestRequestPopup({ updates, onClose, onDismiss }: LatestReques
     const [dontShowAgain, setDontShowAgain] = useState(false);
     const [isVisible, setIsVisible] = useState(true);
 
+    const handleClose = useCallback(() => {
+        setIsVisible(false);
+        if (dontShowAgain) {
+            onDismiss(updates.map(u => u.id));
+        }
+        setTimeout(onClose, 300);
+    }, [dontShowAgain, updates, onDismiss, onClose]);
+
     useEffect(() => {
         // Auto-close after 30 seconds
         const timer = setTimeout(() => {
             handleClose();
         }, 30000);
         return () => clearTimeout(timer);
-    }, []);
-
-    const handleClose = () => {
-        setIsVisible(false);
-        if (dontShowAgain) {
-            onDismiss(updates.map(u => u.id));
-        }
-        setTimeout(onClose, 300);
-    };
+    }, [handleClose]);
 
     const formatTimeAgo = (dateStr: string) => {
         const date = new Date(dateStr);

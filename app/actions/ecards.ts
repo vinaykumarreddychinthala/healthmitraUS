@@ -12,13 +12,13 @@ export async function getECards() {
 
     // Use admin client to bypass RLS
     let { data, error } = await adminClient.from('ecard_members')
-        .select('*, plans(name, price, coverage_amount, features)')
+        .select('*, plans(name, price, coverage_amount, features), policy_holder_kyc(admin_verified)')
         .eq('user_id', user.id);
 
     // Fallback to regular client if admin fails
     if (error) {
         ({ data, error } = await supabase.from('ecard_members')
-            .select('*, plans(name, price, coverage_amount, features)')
+            .select('*, plans(name, price, coverage_amount, features), policy_holder_kyc(admin_verified)')
             .eq('user_id', user.id));
     }
 
@@ -41,7 +41,10 @@ export async function getECards() {
         plan_price: m.plans?.price || 0,
         plan_features: m.plans?.features || [],
         coverage_amount: m.plans?.coverage_amount || m.coverage_amount || 0,
-        emergency_contact: m.contact_number || null
+        emergency_contact: m.contact_number || null,
+        adminVerified: Array.isArray(m.policy_holder_kyc) 
+            ? m.policy_holder_kyc[0]?.admin_verified || false 
+            : m.policy_holder_kyc?.admin_verified || false
     }));
 
     return { success: true, data: cards };

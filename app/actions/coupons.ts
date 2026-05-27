@@ -56,7 +56,7 @@ export async function upsertCoupon(coupon: Partial<Coupon>) {
     }
 
     // Ensure discount_type is always either 'percentage' or 'fixed'
-    let discountType = coupon.type === 'percentage' ? 'percentage' : 'fixed';
+    const discountType = coupon.type === 'percentage' ? 'percentage' : 'fixed';
 
     const dbPayload: any = {
         code: coupon.code.trim().toUpperCase(),

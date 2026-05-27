@@ -88,7 +88,7 @@ export async function getUserInvoices() {
     if (!user) return { success: false, error: 'Not authenticated' };
 
     // Try to get from invoices table first
-    let { data: invoices, error } = await adminClient.from('invoices')
+    const { data: invoices, error } = await adminClient.from('invoices')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });

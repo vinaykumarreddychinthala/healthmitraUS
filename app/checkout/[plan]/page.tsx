@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef, use } from 'react';
@@ -50,6 +51,10 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
     const [editName, setEditName] = useState('');
     const [editEmail, setEditEmail] = useState('');
     const [editPhone, setEditPhone] = useState('');
+
+    const [otpStep, setOtpStep] = useState(1);
+    const [newEmailOtp, setNewEmailOtp] = useState('');
+    const [newEmailHash, setNewEmailHash] = useState('');
 
     useEffect(() => {
         // Read guest info from sessionStorage (set by checkout-auth page)
@@ -174,6 +179,67 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
         else toast.error(result?.error || 'Purchase failed');
     };
 
+    const handleSendNewEmailOTP = async () => {
+        if (!editName || !editEmail || !editPhone) {
+            toast.error('Please fill in all fields');
+            return;
+        }
+        setProcessing(true);
+        try {
+            const res = await fetch('/api/auth/send-custom-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: editName, email: editEmail, phone: editPhone })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setNewEmailHash(data.hash);
+                setOtpStep(2);
+                toast.success(`OTP sent to ${editEmail}`);
+            } else {
+                toast.error(data.error || 'Failed to send OTP');
+            }
+        } catch {
+            toast.error('Failed to send OTP');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleVerifyNewEmailOTP = async () => {
+        if (!newEmailOtp || newEmailOtp.length < 6) return;
+        setProcessing(true);
+        try {
+            const res = await fetch('/api/auth/verify-custom-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: editEmail,
+                    otp: newEmailOtp,
+                    hash: newEmailHash,
+                    name: editName,
+                    phone: editPhone,
+                    planId: plan?.id,
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                toast.success('Email verified successfully!');
+                const updatedInfo = { ...guestInfo!, email: editEmail, name: editName, phone: editPhone, verified: true };
+                setGuestInfo(updatedInfo);
+                sessionStorage.setItem('checkout_user', JSON.stringify(updatedInfo));
+                setOtpStep(1);
+                setNewEmailOtp('');
+            } else {
+                toast.error(data.error || 'Invalid OTP');
+            }
+        } catch {
+            toast.error('Verification failed');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
     const handleRazorpay = async () => {
         if (!plan || !guestInfo) return;
         setProcessing(true);
@@ -231,6 +297,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
     const currency = isIndia ? '₹' : '$';
     const anyLivePayment = razorpaySettings.enabled || paypalSettings.enabled || stripeSettings.enabled;
     const stripePromise = stripeSettings.publishableKey ? loadStripe(stripeSettings.publishableKey) : null;
+
+    const isEmailChanged = guestInfo && editEmail !== guestInfo.email;
 
     return (
         <>
@@ -435,39 +503,72 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent className="pt-0 space-y-4">
-                                        {!anyLivePayment && (
-                                            <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium bg-amber-50 border border-amber-200 text-amber-700">
-                                                <AlertCircle className="w-4 h-4 shrink-0" /> Test Payment Mode
+                                        {isEmailChanged ? (
+                                            <div className="space-y-4">
+                                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+                                                    <AlertCircle className="w-5 h-5 mb-2 text-amber-600" />
+                                                    You changed your email from <strong className="font-semibold">{guestInfo.email}</strong> to <strong className="font-semibold">{editEmail}</strong>. 
+                                                    Please verify this new email to proceed.
+                                                </div>
+                                                {otpStep === 2 ? (
+                                                    <div className="space-y-3">
+                                                        <Input 
+                                                            value={newEmailOtp} 
+                                                            onChange={e => setNewEmailOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))} 
+                                                            placeholder="Enter 6-digit OTP" 
+                                                            className="text-center tracking-widest text-lg font-bold h-12"
+                                                            maxLength={6}
+                                                        />
+                                                        <div className="flex gap-2">
+                                                            <Button variant="outline" onClick={() => setOtpStep(1)} disabled={processing} className="flex-1">Back</Button>
+                                                            <Button onClick={handleVerifyNewEmailOTP} disabled={processing || newEmailOtp.length < 6} className="flex-1 bg-teal-600 hover:bg-teal-700 text-white">
+                                                                {processing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Verify OTP'}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <Button onClick={handleSendNewEmailOTP} disabled={processing} className="w-full bg-teal-600 hover:bg-teal-700 text-white h-11">
+                                                        {processing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Verify New Email'}
+                                                    </Button>
+                                                )}
                                             </div>
-                                        )}
-                                        <div className="text-center py-3 border border-slate-100 rounded-xl bg-slate-50">
-                                            <p className="text-3xl font-bold text-slate-900">{currency}{total.toLocaleString()}</p>
-                                            <p className="text-xs text-slate-400 mt-1">total amount{isIndia ? ' (incl. GST)' : ''}</p>
-                                        </div>
+                                        ) : (
+                                            <>
+                                                {!anyLivePayment && (
+                                                    <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium bg-amber-50 border border-amber-200 text-amber-700">
+                                                        <AlertCircle className="w-4 h-4 shrink-0" /> Test Payment Mode
+                                                    </div>
+                                                )}
+                                                <div className="text-center py-3 border border-slate-100 rounded-xl bg-slate-50">
+                                                    <p className="text-3xl font-bold text-slate-900">{currency}{total.toLocaleString()}</p>
+                                                    <p className="text-xs text-slate-400 mt-1">total amount{isIndia ? ' (incl. GST)' : ''}</p>
+                                                </div>
 
-                                        {razorpaySettings.enabled && (
-                                            <Button onClick={handleRazorpay} disabled={processing} className="w-full h-12 text-sm font-semibold bg-[#072654] hover:bg-[#061e42] text-white gap-2">
-                                                {processing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><CreditCard className="h-4 w-4" /> Pay with Razorpay</>}
-                                            </Button>
-                                        )}
+                                                {razorpaySettings.enabled && (
+                                                    <Button onClick={handleRazorpay} disabled={processing} className="w-full h-12 text-sm font-semibold bg-[#072654] hover:bg-[#061e42] text-white gap-2">
+                                                        {processing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><CreditCard className="h-4 w-4" /> Pay with Razorpay</>}
+                                                    </Button>
+                                                )}
 
-                                        {paypalSettings.enabled && (
-                                            <div>
-                                                {processing && <div className="flex items-center justify-center gap-2 py-3 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Completing payment...</div>}
-                                                <div ref={paypalRef} id="paypal-button-container" className={processing ? 'opacity-40 pointer-events-none' : ''} />
-                                            </div>
-                                        )}
+                                                {paypalSettings.enabled && (
+                                                    <div>
+                                                        {processing && <div className="flex items-center justify-center gap-2 py-3 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Completing payment...</div>}
+                                                        <div ref={paypalRef} id="paypal-button-container" className={processing ? 'opacity-40 pointer-events-none' : ''} />
+                                                    </div>
+                                                )}
 
-                                        {stripeSettings.enabled && stripeSettings.clientSecret && stripePromise && (
-                                            <Elements stripe={stripePromise} options={{ clientSecret: stripeSettings.clientSecret }}>
-                                                <StripePaymentForm total={total} planId={plan.id} promoCode={appliedCode?.code} onSuccess={handleStripeSuccess} />
-                                            </Elements>
-                                        )}
+                                                {stripeSettings.enabled && stripeSettings.clientSecret && stripePromise && (
+                                                    <Elements stripe={stripePromise} options={{ clientSecret: stripeSettings.clientSecret }}>
+                                                        <StripePaymentForm total={total} planId={plan.id} promoCode={appliedCode?.code} onSuccess={handleStripeSuccess} />
+                                                    </Elements>
+                                                )}
 
-                                        {!anyLivePayment && (
-                                            <Button onClick={handleTestPayment} disabled={processing} className="w-full h-12 text-sm font-semibold bg-primary hover:bg-primary/90 text-white gap-2">
-                                                {processing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="h-4 w-4" /> Complete Purchase (Test)</>}
-                                            </Button>
+                                                {!anyLivePayment && (
+                                                    <Button onClick={handleTestPayment} disabled={processing} className="w-full h-12 text-sm font-semibold bg-primary hover:bg-primary/90 text-white gap-2">
+                                                        {processing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="h-4 w-4" /> Complete Purchase (Test)</>}
+                                                    </Button>
+                                                )}
+                                            </>
                                         )}
 
                                         <div className="pt-2 border-t border-slate-100 space-y-2">

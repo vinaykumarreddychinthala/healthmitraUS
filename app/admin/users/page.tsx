@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { User, UserType } from '@/types/user';
 import { getUsers, toggleUserStatus, getDepartments } from '@/app/actions/users';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ export default function UsersListingPage() {
     const [departments, setDepartments] = useState<any[]>([]);
     const [leads, setLeads] = useState<any[]>([]);
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const [verifyCountFilter, setVerifyCountFilter] = useState('all');
 
     const handleExport = async () => {
         setExporting(true);
@@ -78,7 +79,7 @@ export default function UsersListingPage() {
                 }
 
                 if (activeTab === 'potential') {
-                    const res = await fetch(`/api/admin/potential-customers?q=${encodeURIComponent(query)}`);
+                    const res = await fetch(`/api/admin/potential-customers?q=${encodeURIComponent(query)}&verify_count=${verifyCountFilter}`);
                     const data = await res.json();
                     if (data.success) {
                         setLeads(data.data || []);
@@ -127,7 +128,7 @@ export default function UsersListingPage() {
 
         const timeout = setTimeout(load, 300); // debounce
         return () => clearTimeout(timeout);
-    }, [activeTab, query, deptFilter]);
+    }, [activeTab, query, deptFilter, verifyCountFilter]);
 
     const handleStatusToggle = async (id: string, currentStatus: string) => {
         // Optimistic update
@@ -233,6 +234,22 @@ export default function UsersListingPage() {
                             </Select>
                         </div>
                     )}
+                    {/* Verifications Count Filter - Only show for potential customers context */}
+                    {activeTab === 'potential' && (
+                        <div className="w-full md:w-64">
+                            <Select value={verifyCountFilter} onValueChange={setVerifyCountFilter}>
+                                <SelectTrigger className="bg-white border-slate-200 text-slate-700">
+                                    <SelectValue placeholder="Verifications" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white border-slate-200 text-slate-700">
+                                    <SelectItem value="all">All Leads</SelectItem>
+                                    <SelectItem value="gt_2">More than 2 verifications</SelectItem>
+                                    <SelectItem value="gt_5">More than 5 verifications</SelectItem>
+                                    <SelectItem value="gt_10">More than 10 verifications</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -279,9 +296,8 @@ export default function UsersListingPage() {
                                     </TableRow>
                                 ) : (
                                     leads.map(lead => (
-                                        <>
+                                        <Fragment key={lead.id}>
                                             <TableRow
-                                                key={lead.id}
                                                 className="border-slate-100 hover:bg-slate-50 cursor-pointer"
                                                 onClick={() => toggleRow(lead.id)}
                                             >
@@ -401,7 +417,7 @@ export default function UsersListingPage() {
                                                     </TableCell>
                                                 </TableRow>
                                             )}
-                                        </>
+                                        </Fragment>
                                     ))
                                 )
                             ) : users.length === 0 ? (

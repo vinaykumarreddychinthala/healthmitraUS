@@ -13,6 +13,7 @@ export async function GET(request: Request) {
 
         const { searchParams } = new URL(request.url);
         const query = searchParams.get('q') || '';
+        const verifyCountFilter = searchParams.get('verify_count');
         const page = parseInt(searchParams.get('page') || '1');
         const limit = parseInt(searchParams.get('limit') || '50');
         const offset = (page - 1) * limit;
@@ -26,6 +27,16 @@ export async function GET(request: Request) {
 
         if (query) {
             dbQuery = dbQuery.or(`email.ilike.%${query}%,name.ilike.%${query}%,phone.ilike.%${query}%`);
+        }
+
+        if (verifyCountFilter) {
+            if (verifyCountFilter === 'gt_2') {
+                dbQuery = dbQuery.gt('verify_count', 2);
+            } else if (verifyCountFilter === 'gt_5') {
+                dbQuery = dbQuery.gt('verify_count', 5);
+            } else if (verifyCountFilter === 'gt_10') {
+                dbQuery = dbQuery.gt('verify_count', 10);
+            }
         }
 
         const { data, error, count } = await dbQuery;

@@ -158,9 +158,22 @@ export default function EditPlanPage({ params }: { params: Promise<{ id: string 
 
     const updatePlanData = (updates: Partial<Plan>) => {
         setPlan(prev => {
-            const updated = { ...prev, ...updates };
-            if (updates.basePrice !== undefined || updates.gstPercent !== undefined) {
-                const base = updates.basePrice ?? prev.basePrice ?? 0;
+            const sanitizedUpdates = { ...updates };
+            if (updates.basePrice !== undefined && Number.isNaN(updates.basePrice)) {
+                sanitizedUpdates.basePrice = undefined;
+            }
+            if (updates.gstPercent !== undefined && Number.isNaN(updates.gstPercent)) {
+                sanitizedUpdates.gstPercent = undefined;
+            }
+            if (updates.validityValue !== undefined && Number.isNaN(updates.validityValue)) {
+                sanitizedUpdates.validityValue = undefined;
+            }
+
+            const updated = { ...prev, ...sanitizedUpdates };
+            if (sanitizedUpdates.basePrice !== undefined || sanitizedUpdates.gstPercent !== undefined) {
+                const base = (sanitizedUpdates.basePrice === undefined || Number.isNaN(sanitizedUpdates.basePrice))
+                    ? 0
+                    : sanitizedUpdates.basePrice;
                 const gst = 0;
                 updated.totalPrice = base;
             }
@@ -379,11 +392,27 @@ export default function EditPlanPage({ params }: { params: Promise<{ id: string 
                             <div className="grid grid-cols-3 gap-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
                                 <div className="space-y-2">
                                     <Label>Base Price ($) *</Label>
-                                    <Input type="number" value={plan.basePrice || 0} onChange={e => updatePlanData({ basePrice: parseFloat(e.target.value) })} className="bg-white border-slate-200 text-slate-900" />
+                                    <Input 
+                                        type="number" 
+                                        value={plan.basePrice === undefined || Number.isNaN(plan.basePrice) ? '' : plan.basePrice} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            updatePlanData({ basePrice: val === '' ? undefined : parseFloat(val) });
+                                        }} 
+                                        className="bg-white border-slate-200 text-slate-900" 
+                                    />
                                 </div>
                                 {/* <div className="space-y-2">
                                     <Label>GST (%)</Label>
-                                    <Input type="number" value={plan.gstPercent || 0} onChange={e => updatePlanData({ gstPercent: parseFloat(e.target.value) })} className="bg-white border-slate-200 text-slate-900" />
+                                    <Input 
+                                        type="number" 
+                                        value={plan.gstPercent === undefined || Number.isNaN(plan.gstPercent) ? '' : plan.gstPercent} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            updatePlanData({ gstPercent: val === '' ? undefined : parseFloat(val) });
+                                        }} 
+                                        className="bg-white border-slate-200 text-slate-900" 
+                                    />
                                 </div> */}
                                 <div className="space-y-2">
                                     <Label className="text-teal-600">Total Price (Auto)</Label>
@@ -443,7 +472,15 @@ export default function EditPlanPage({ params }: { params: Promise<{ id: string 
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Value</Label>
-                                        <Input type="number" value={plan.validityValue || 1} onChange={e => updatePlanData({ validityValue: parseInt(e.target.value) })} className="bg-white border-slate-200 text-slate-900" />
+                                        <Input 
+                                            type="number" 
+                                            value={plan.validityValue === undefined || Number.isNaN(plan.validityValue) ? '' : plan.validityValue} 
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                updatePlanData({ validityValue: val === '' ? undefined : parseInt(val) });
+                                            }} 
+                                            className="bg-white border-slate-200 text-slate-900" 
+                                        />
                                     </div>
                                 </div>
                             </div>

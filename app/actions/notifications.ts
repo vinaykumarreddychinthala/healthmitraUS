@@ -254,7 +254,7 @@ export async function getAllNotificationsForAdmin(limit = 100): Promise<{ succes
 
         // Fetch sender info manually since FK doesn't work for profiles join
         const senderIds = [...new Set(data.map(n => n.sender_id).filter(Boolean))];
-        let senderMap: Record<string, { full_name: string; email: string }> = {};
+        const senderMap: Record<string, { full_name: string; email: string }> = {};
 
         if (senderIds.length > 0) {
             const { data: profiles } = await supabase
@@ -297,7 +297,7 @@ export async function getAllNotificationsAdmin(): Promise<{ success: boolean; al
 
         // Fetch sender info manually
         const senderIds = [...new Set(data.map(n => n.sender_id).filter(Boolean))];
-        let senderMap: Record<string, { full_name: string; email: string }> = {};
+        const senderMap: Record<string, { full_name: string; email: string }> = {};
 
         if (senderIds.length > 0) {
             const { data: profiles } = await supabase

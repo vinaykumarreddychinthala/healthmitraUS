@@ -18,6 +18,13 @@ export async function POST(request: Request) {
         const dataToHash = `${email}:${otp}`;
         const hash = crypto.createHmac('sha256', secret).update(dataToHash).digest('hex');
 
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('\n================================================================');
+            console.log(`🔑 DEV MODE OTP TRIGGERED FOR: ${email}`);
+            console.log(`🔑 OTP CODE: ${otp}`);
+            console.log('================================================================\n');
+        }
+
         // Send the OTP via email
         const emailResult = await sendMail({
             to: email,
