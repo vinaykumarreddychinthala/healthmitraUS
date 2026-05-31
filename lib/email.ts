@@ -47,6 +47,19 @@ export const sendMail = async ({
         return { success: true, info };
     } catch (error) {
         console.error('Error sending email:', error);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('\n================================================================');
+            console.log(`⚠️ SMTP failed. FALLING BACK TO MOCK EMAIL TO: ${to}`);
+            console.log(`📝 SUBJECT: ${subject}`);
+            
+            // Try to extract OTP from HTML if it exists for easier development
+            const otpMatch = html.match(/<span[^>]*>(\d{6})<\/span>/) || html.match(/>(\d{6})</);
+            if (otpMatch) {
+                console.log(`🔑 EXTRACTED OTP: ${otpMatch[1]}`);
+            }
+            console.log('================================================================\n');
+            return { success: true, info: 'mocked-fallback' };
+        }
         return { success: false, error };
     }
 };

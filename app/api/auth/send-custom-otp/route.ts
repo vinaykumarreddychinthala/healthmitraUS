@@ -1,14 +1,26 @@
 import { NextResponse } from 'next/server';
 import { sendMail } from '@/lib/email';
 import crypto from 'crypto';
+import { verifyTurnstileToken } from '@/lib/turnstile';
 
 export async function POST(request: Request) {
     try {
-        const { name, email, phone } = await request.json();
+        const { name, email, phone, turnstileToken } = await request.json();
 
         if (!name || !email || !phone) {
             return NextResponse.json({ success: false, error: 'Name, email, and phone are required' }, { status: 400 });
         }
+
+        // Verify CAPTCHA
+        if (!turnstileToken) {
+            return NextResponse.json({ success: false, error: 'Security verification failed. Please try again.' }, { status: 400 });
+        }
+
+        const isTurnstileValid = await verifyTurnstileToken(turnstileToken);
+        if (!isTurnstileValid) {
+            return NextResponse.json({ success: false, error: 'Security verification failed. Please refresh the page.' }, { status: 400 });
+        }
+
 
         // Generate a 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
