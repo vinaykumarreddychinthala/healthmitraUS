@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
+import { parseDescriptionPoints } from "@/lib/utils"
 
 const SYSTEM_SERVICES_MAP: Record<string, string> = {
     'ambulance': 'Ambulance',
@@ -66,9 +67,14 @@ export default async function PlanDetailsPage(props: { params: Promise<{ slug: s
                                 <h1 className="text-4xl md:text-5xl font-bold mb-4">
                                     {plan.name}
                                 </h1>
-                                <p className="text-xl text-teal-50 mb-6">
-                                    {plan.description}
-                                </p>
+                                 <div className="text-teal-50 mb-6 space-y-1 text-left max-w-lg">
+                                     {parseDescriptionPoints(plan.description).map((point, idx) => (
+                                         <div key={idx} className="flex items-start gap-2 text-lg">
+                                             <span className="text-teal-200 select-none mt-1.5 shrink-0">•</span>
+                                             <span>{point}</span>
+                                         </div>
+                                     ))}
+                                 </div>
                                 
                                 <div className="flex items-baseline gap-2 mb-8">
                                     <span className="text-5xl font-bold">${Number(plan.price || 0).toLocaleString()}</span>

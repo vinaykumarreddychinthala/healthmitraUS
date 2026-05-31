@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
+import { parseDescriptionPoints } from "@/lib/utils"
 
 interface Plan {
     id: string;
@@ -82,7 +83,14 @@ export default async function PlansPage() {
                                         <span className="text-4xl font-bold text-primary">${Number(plan.price || 0).toLocaleString()}</span>
                                         <span className="text-muted-foreground">/year</span>
                                     </div>
-                                    <p className="text-muted-foreground mt-2">{plan.description}</p>
+                                    <div className="text-muted-foreground text-sm mt-3 text-left space-y-1 mx-auto max-w-[280px]">
+                                        {parseDescriptionPoints(plan.description).map((point, idx) => (
+                                            <div key={idx} className="flex items-start gap-2">
+                                                <span className="text-primary select-none mt-1 shrink-0">•</span>
+                                                <span>{point}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                                 <ul className="space-y-3 mb-8">
                                     {(plan.features || []).map((feature, idx) => (

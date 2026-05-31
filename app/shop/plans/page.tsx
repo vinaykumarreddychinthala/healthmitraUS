@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { parseDescriptionPoints } from "@/lib/utils"
 
 interface Plan {
     id: string;
@@ -140,7 +141,14 @@ export default function ShopPlansPage() {
                                 <CardContent className="p-8">
                                     <div className="text-center mb-6">
                                         <h3 className="text-2xl font-bold text-slate-900 mb-2">{plan.name}</h3>
-                                        <p className="text-slate-500 text-sm">{plan.description}</p>
+                                        <div className="text-slate-500 text-sm mt-3 text-left space-y-1 mx-auto max-w-[280px]">
+                                            {parseDescriptionPoints(plan.description).map((point, idx) => (
+                                                <div key={idx} className="flex items-start gap-2">
+                                                    <span className="text-teal-500 select-none mt-1 shrink-0">•</span>
+                                                    <span>{point}</span>
+                                                </div>
+                                            ))}
+                                        </div>
                                         <div className="mt-4">
                                             <span className="text-4xl font-bold text-slate-900">${Number(plan.price || 0).toLocaleString()}</span>
                                             <span className="text-slate-500">/year</span>

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, ArrowRight, ShieldCheck, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import { Turnstile } from '@/components/ui/turnstile';
 
 export default function CheckoutAuthPage({ params }: { params: Promise<{ planId: string }> }) {
     const resolvedParams = use(params);
@@ -16,6 +17,7 @@ export default function CheckoutAuthPage({ params }: { params: Promise<{ planId:
 
     const [step, setStep] = useState<1 | 2>(1);
     const [loading, setLoading] = useState(false);
+    const [turnstileToken, setTurnstileToken] = useState<string>('');
 
     const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
     const [otp, setOtp] = useState('');
@@ -33,7 +35,7 @@ export default function CheckoutAuthPage({ params }: { params: Promise<{ planId:
             const res = await fetch('/api/auth/send-custom-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({ ...formData, turnstileToken })
             });
             const data = await res.json();
             if (data.success) {
@@ -155,7 +157,9 @@ export default function CheckoutAuthPage({ params }: { params: Promise<{ planId:
                                     />
                                 </div>
 
-                                <Button type="submit" className="w-full h-11 mt-6 text-base" disabled={loading}>
+                                <Turnstile onVerify={(token) => setTurnstileToken(token)} />
+
+                                <Button type="submit" className="w-full h-11 mt-6 text-base" disabled={loading || !turnstileToken}>
                                     {loading ? (
                                         <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Sending OTP...</>
                                     ) : (

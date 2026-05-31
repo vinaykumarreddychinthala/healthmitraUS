@@ -2,6 +2,7 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { parseDescriptionPoints } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
@@ -390,10 +391,14 @@ export default async function Home() {
                       <h3 className="text-2xl font-bold text-slate-900 mb-2">
                         {plan.name}
                       </h3>
-                      <p className="text-slate-500 mb-6 text-sm">
-                        {plan.description ||
-                          "Comprehensive coverage for your family"}
-                      </p>
+                      <div className="text-slate-500 mb-6 text-sm text-left space-y-1 mx-auto max-w-[280px]">
+                        {parseDescriptionPoints(plan.description || "Comprehensive coverage for your family").map((point, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span className="text-teal-500 select-none mt-1 shrink-0">•</span>
+                            <span>{point}</span>
+                          </div>
+                        ))}
+                      </div>
                       <div className="mb-6">
                         <span className="text-4xl font-bold text-slate-900">
                           ${Number(plan.price || 0).toLocaleString()}

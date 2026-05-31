@@ -19,6 +19,7 @@ import { Plan, PlanService, PlanDetail, PlanCategory } from '@/types/plans';
 import { getCategories, createPlan } from '@/app/actions/plans';
 import Link from 'next/link';
 import { useDropzone } from 'react-dropzone';
+import { parseDescriptionPoints } from '@/lib/utils';
 
 const TOTAL_STEPS = 5;
 
@@ -704,7 +705,14 @@ export default function CreatePlanWizard() {
                                     <CheckCircle className="h-8 w-8 text-teal-600" />
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-800">{plan.name || 'Untitled Plan'}</h2>
-                                <p className="text-slate-500 max-w-md mx-auto">{plan.description || 'No description provided.'}</p>
+                                <div className="text-slate-500 max-w-md mx-auto text-left space-y-1 inline-block">
+                                    {parseDescriptionPoints(plan.description || 'No description provided.').map((point, idx) => (
+                                        <div key={idx} className="flex items-start gap-2 text-sm">
+                                            <span className="text-teal-500 select-none mt-1 shrink-0">•</span>
+                                            <span>{point}</span>
+                                        </div>
+                                    ))}
+                                </div>
 
                                 <div className="flex justify-center gap-8 py-6 border-t border-b border-slate-200">
                                     <div className="text-center">

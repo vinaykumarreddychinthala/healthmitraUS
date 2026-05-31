@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
+import { Turnstile } from '@/components/ui/turnstile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +17,7 @@ import { validatePromoCode } from '@/app/actions/coupons';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import StripePaymentForm from '@/components/client/StripePaymentForm';
+import { parseDescriptionPoints } from '@/lib/utils';
 
 interface Plan {
     id: string; name: string; description: string; price: number;
@@ -55,6 +57,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
     const [otpStep, setOtpStep] = useState(1);
     const [newEmailOtp, setNewEmailOtp] = useState('');
     const [newEmailHash, setNewEmailHash] = useState('');
+    const [turnstileToken, setTurnstileToken] = useState<string>('');
 
     useEffect(() => {
         // Read guest info from sessionStorage (set by checkout-auth page)
@@ -189,7 +192,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
             const res = await fetch('/api/auth/send-custom-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: editName, email: editEmail, phone: editPhone })
+                body: JSON.stringify({ name: editName, email: editEmail, phone: editPhone, turnstileToken })
             });
             const data = await res.json();
             if (data.success) {
@@ -230,6 +233,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                 sessionStorage.setItem('checkout_user', JSON.stringify(updatedInfo));
                 setOtpStep(1);
                 setNewEmailOtp('');
+                setTurnstileToken('');
             } else {
                 toast.error(data.error || 'Invalid OTP');
             }
@@ -367,7 +371,14 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <h3 className="font-bold text-slate-900 text-lg">{plan.name}</h3>
-                                            <p className="text-slate-500 text-sm mt-0.5">{plan.description}</p>
+                                            <div className="text-slate-500 text-sm mt-1.5 space-y-1">
+                                                {parseDescriptionPoints(plan.description).map((point, idx) => (
+                                                    <div key={idx} className="flex items-start gap-1.5">
+                                                        <span className="text-primary select-none mt-1 shrink-0">•</span>
+                                                        <span>{point}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
                                             <div className="flex flex-wrap items-center gap-2 mt-2">
                                                 <Badge variant="outline" className="text-xs border-primary/30 text-primary">{plan.duration_days} days</Badge>
                                                 {plan.coverage_amount && <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50">${Number(plan.coverage_amount).toLocaleString()} cover</Badge>}
@@ -527,9 +538,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <Button onClick={handleSendNewEmailOTP} disabled={processing} className="w-full bg-teal-600 hover:bg-teal-700 text-white h-11">
-                                                        {processing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Verify New Email'}
-                                                    </Button>
+                                                    <>
+                                                        <Turnstile onVerify={(token) => setTurnstileToken(token)} />
+                                                        <Button onClick={handleSendNewEmailOTP} disabled={processing || !turnstileToken} className="w-full bg-teal-600 hover:bg-teal-700 text-white h-11">
+                                                            {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Verify New Email'}
+                                                        </Button>
+                                                    </>
                                                 )}
                                             </div>
                                         ) : (
