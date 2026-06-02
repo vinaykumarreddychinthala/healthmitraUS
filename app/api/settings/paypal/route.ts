@@ -1,19 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
     try {
-        const supabase = await createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (!user) {
-            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-        }
-
-        // Any authenticated user can read public PayPal settings (clientId, enabled, sandbox)
-        // Secret key is never returned here
         const adminClient = await createAdminClient();
         const { data: settings } = await adminClient.from('system_settings')
             .select('key, value')

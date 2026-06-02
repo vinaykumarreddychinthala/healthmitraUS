@@ -2,6 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { ServiceRequest, SRType, SRStatus, Agent } from '@/types/service-requests';
+import { sendMail } from '@/lib/email';
 
 interface ProfileData {
     id: string;
@@ -327,6 +328,29 @@ export async function createAgent(data: { name: string; email: string; phone: st
             return { success: false, error: 'Failed to create auth user: ' + authError.message };
         }
         profileId = authData?.user?.id;
+
+        // Send welcome email with credentials
+        try {
+            await sendMail({
+                to: data.email,
+                subject: 'Welcome to HealthMitra - Agent Account Created',
+                devData: { 'Email': data.email, 'Password': tempPassword },
+                html: `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: auto;">
+                        <p>Dear ${data.name},</p>
+                        <p>An Agent account has been created for you on HealthMitra Call Centre.</p>
+                        <p>Here are your temporary login credentials:</p>
+                        <ul>
+                            <li><strong>User ID / Email:</strong> ${data.email}</li>
+                            <li><strong>Password:</strong> ${tempPassword}</li>
+                        </ul>
+                        <p>Please login to the portal using these credentials.</p>
+                    </div>
+                `
+            });
+        } catch (mailError) {
+            console.error('Error sending agent welcome email:', mailError);
+        }
     }
 
     if (!profileId) {

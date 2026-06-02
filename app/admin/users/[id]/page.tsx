@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { User } from '@/types/user';
 import { getUser, toggleUserStatus, changePlan, resendCredentials, activateNewPlan, getDepartments, updateUser, getUserPolicyMembers } from '@/app/actions/users';
+import { getUserMembersWithKYC, adminUpdateKYCDetails } from '@/app/actions/kyc-admin';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,12 +11,16 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
 import {
     ArrowLeft, Edit2, Mail, Phone, Clock, Shield, UserX, UserCheck,
     MapPin, Globe, CreditCard, FileText, Send, Loader2, RefreshCw,
-    Calendar, User as UserIcon, Landmark, Upload, Eye, Save, X
+    Calendar, User as UserIcon, Landmark, Upload, Eye, Save, X,
+    ShieldCheck, ShieldAlert, Lock, ExternalLink, Edit3, Fingerprint
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -62,6 +67,15 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
     const [policyMembers, setPolicyMembers] = useState<any[]>([]);
     const [loadingMembers, setLoadingMembers] = useState(false);
 
+    // KYC members with full data (for the enhanced tab)
+    const [kycMembers, setKycMembers] = useState<any[]>([]);
+    const [loadingKyc, setLoadingKyc] = useState(false);
+
+    // Admin direct KYC edit modal
+    const [kycEditModal, setKycEditModal] = useState<{ open: boolean; member: any | null }>({ open: false, member: null });
+    const [kycEditForm, setKycEditForm] = useState({ holderFullName: '', relation: '', aadhaarNumber: '', panNumber: '', adminNote: '' });
+    const [savingKyc, setSavingKyc] = useState(false);
+
     useEffect(() => {
         const load = async () => {
             setLoading(true);
@@ -99,13 +113,57 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
         const loadMembers = async () => {
             setLoadingMembers(true);
             const res = await getUserPolicyMembers(id);
-            if (res.success && res.data) {
-                setPolicyMembers(res.data);
-            }
+            if (res.success && res.data) setPolicyMembers(res.data);
             setLoadingMembers(false);
         };
         loadMembers();
     }, [id]);
+
+    useEffect(() => {
+        const loadKyc = async () => {
+            setLoadingKyc(true);
+            const res = await getUserMembersWithKYC(id);
+            if (res.success) setKycMembers(res.data);
+            setLoadingKyc(false);
+        };
+        loadKyc();
+    }, [id]);
+
+    const handleAdminKycEdit = (member: any) => {
+        setKycEditForm({
+            holderFullName: member.kyc?.holderFullName || '',
+            relation: member.kyc?.relation || member.relation || '',
+            aadhaarNumber: member.kyc?.aadhaarNumber || '',
+            panNumber: member.kyc?.panNumber || '',
+            adminNote: '',
+        });
+        setKycEditModal({ open: true, member });
+    };
+
+    const handleSaveAdminKyc = async () => {
+        if (!kycEditModal.member) return;
+        setSavingKyc(true);
+        try {
+            const res = await adminUpdateKYCDetails(kycEditModal.member.id, {
+                holderFullName: kycEditForm.holderFullName || undefined,
+                relation: kycEditForm.relation || undefined,
+                aadhaarNumber: kycEditForm.aadhaarNumber || undefined,
+                panNumber: kycEditForm.panNumber || undefined,
+                adminNote: kycEditForm.adminNote || undefined,
+            });
+            if (res.success) {
+                toast.success('KYC updated successfully');
+                setKycEditModal({ open: false, member: null });
+                // Reload KYC data
+                const refreshed = await getUserMembersWithKYC(id);
+                if (refreshed.success) setKycMembers(refreshed.data);
+            } else {
+                toast.error(res.error || 'Failed to update KYC');
+            }
+        } finally {
+            setSavingKyc(false);
+        }
+    };
 
     const handleEditToggle = () => {
         if (isEditing && user) {
@@ -429,91 +487,182 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                     </Card>
                 </TabsContent>
 
-                {/* POLICY MEMBERS KYC TAB */}
-                <TabsContent value="policy_kyc" className="mt-6 space-y-6">
-                    {loadingMembers ? (
+                {/* POLICY MEMBERS KYC TAB — Enhanced */}
+                <TabsContent value="policy_kyc" className="mt-6 space-y-4">
+                    {loadingKyc ? (
                         <div className="flex items-center justify-center h-40"><Loader2 className="h-6 w-6 animate-spin text-teal-500" /></div>
-                    ) : policyMembers.length === 0 ? (
-                        <Card className="bg-white border-slate-200 shadow-sm"><CardContent className="py-10 text-center text-slate-400">No policy members found.</CardContent></Card>
-                    ) : (
-                        policyMembers.map((member: any) => {
-                            const kycArray = Array.isArray(member.policy_holder_kyc) ? member.policy_holder_kyc : (member.policy_holder_kyc ? [member.policy_holder_kyc] : []);
-                            const kyc = kycArray[0] || null;
-                            const isSubmitted = kyc?.kyc_submitted;
-                            const isVerified = kyc?.admin_verified;
-                            
-                            return (
-                            <Card key={member.id} className="bg-white border-slate-200 shadow-sm">
-                                <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                                    <div>
-                                        <CardTitle className="text-base text-slate-700">{member.full_name || 'Pending Name'} ({member.relation})</CardTitle>
-                                        <p className="text-xs text-slate-500 mt-1">E-Card Status: <Badge variant="outline" className="text-[10px] ml-1">{member.status}</Badge></p>
-                                    </div>
-                                    <Badge className={`text-xs border ${isVerified ? 'bg-emerald-100 text-emerald-700' : (isSubmitted ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500')}`}>
-                                        {isVerified ? 'Verified' : (isSubmitted ? 'Pending Admin' : 'Not Submitted')}
-                                    </Badge>
-                                </CardHeader>
-                                <CardContent>
-                                    {kyc ? (
-                                        <div className="space-y-4">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <Row label="Aadhaar" value={kyc.aadhaar_declaration ? 'Self-Declared' : (kyc.aadhaar_number || 'N/A')} />
-                                                <Row label="PAN" value={kyc.pan_declaration ? 'Self-Declared' : (kyc.pan_number || 'N/A')} />
+                    ) : kycMembers.length === 0 ? (
+                        <Card className="bg-white border-slate-200 shadow-sm"><CardContent className="py-10 text-center text-slate-400">No policy members found for this user.</CardContent></Card>
+                    ) : kycMembers.map((member: any) => {
+                        const kyc = member.kyc;
+                        const hasKyc = !!kyc && kyc.kycSubmitted;
+                        const hasPendingReq = !!member.pendingEditRequest;
+
+                        return (
+                            <Card key={member.id} className="bg-white border-slate-200 shadow-sm overflow-hidden">
+                                {/* Card header */}
+                                <div className="px-5 py-4 flex items-center justify-between border-b border-slate-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${hasKyc ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                                            {hasKyc
+                                                ? <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                                                : <ShieldAlert className="w-5 h-5 text-amber-500" />}
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-slate-800">{member.fullName || 'Name Pending'}</p>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <Badge variant="outline" className="text-[10px]">{member.relation}</Badge>
+                                                <span className="text-xs text-slate-400 font-mono">{member.cardId}</span>
                                             </div>
-                                            {kyc.photo_url && (
-                                                <div className="mt-2">
-                                                    <span className="text-sm text-slate-500 block mb-2">Photo Document</span>
-                                                    <a href={kyc.photo_url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline text-sm flex items-center gap-1">
-                                                        <Eye className="h-4 w-4" /> View Document
-                                                    </a>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {hasPendingReq && (
+                                            <Badge className="text-xs bg-amber-100 text-amber-700 border border-amber-200">
+                                                Edit Requested
+                                            </Badge>
+                                        )}
+                                        <Badge className={`text-xs border ${
+                                            kyc?.adminVerified ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                            : hasKyc ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                            : 'bg-slate-100 text-slate-500 border-slate-200'
+                                        }`}>
+                                            {kyc?.adminVerified ? 'Admin Verified' : hasKyc ? 'Submitted' : 'Not Submitted'}
+                                        </Badge>
+                                        {hasKyc && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 text-xs border-teal-200 text-teal-700 hover:bg-teal-50 gap-1"
+                                                onClick={() => handleAdminKycEdit(member)}
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5" /> Edit KYC
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <CardContent className="p-5">
+                                    {hasKyc ? (
+                                        <div className="space-y-4">
+                                            {/* Photo + Name */}
+                                            <div className="flex items-center gap-4">
+                                                {kyc.photoUrl ? (
+                                                    <img src={kyc.photoUrl} alt="photo" className="w-16 h-16 rounded-xl object-cover border-2 border-slate-100" />
+                                                ) : (
+                                                    <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center">
+                                                        <UserIcon className="w-7 h-7 text-slate-400" />
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <p className="font-bold text-slate-800">{kyc.holderFullName}</p>
+                                                    <p className="text-xs text-slate-400 mt-0.5">
+                                                        Submitted {new Date(kyc.kycSubmittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    </p>
+                                                    {kyc.adminNote && (
+                                                        <p className="text-xs text-teal-600 mt-0.5">Note: {kyc.adminNote}</p>
+                                                    )}
                                                 </div>
-                                            )}
-                                            {kyc.aadhaar_file_url && (
-                                                <div className="mt-2">
-                                                    <span className="text-sm text-slate-500 block mb-2">Aadhaar Document</span>
-                                                    <a href={kyc.aadhaar_file_url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline text-sm flex items-center gap-1">
-                                                        <Eye className="h-4 w-4" /> View Document
-                                                    </a>
+                                            </div>
+
+                                            {/* Identity docs */}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-xs text-slate-400 font-medium">Aadhaar</p>
+                                                        {kyc.aadhaarFileUrl && (
+                                                            <a href={kyc.aadhaarFileUrl} target="_blank" rel="noreferrer" className="text-xs text-teal-600 flex items-center gap-0.5">
+                                                                <ExternalLink className="w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm font-mono font-semibold text-slate-800 mt-1">
+                                                        {kyc.aadhaarDeclaration ? 'Self-declared' : (kyc.aadhaarNumber || '—')}
+                                                    </p>
                                                 </div>
-                                            )}
-                                            {kyc.pan_file_url && (
-                                                <div className="mt-2">
-                                                    <span className="text-sm text-slate-500 block mb-2">PAN Document</span>
-                                                    <a href={kyc.pan_file_url} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline text-sm flex items-center gap-1">
-                                                        <Eye className="h-4 w-4" /> View Document
-                                                    </a>
+                                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-xs text-slate-400 font-medium">PAN</p>
+                                                        {kyc.panFileUrl && (
+                                                            <a href={kyc.panFileUrl} target="_blank" rel="noreferrer" className="text-xs text-teal-600 flex items-center gap-0.5">
+                                                                <ExternalLink className="w-3 h-3" />
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm font-mono font-semibold text-slate-800 mt-1">
+                                                        {kyc.panDeclaration ? 'Self-declared' : (kyc.panNumber || '—')}
+                                                    </p>
                                                 </div>
-                                            )}
-                                            {!isVerified && isSubmitted && (
-                                                <div className="mt-4 pt-4 border-t border-slate-100">
-                                                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={async () => {
-                                                        const res = await fetch(`/api/admin/kyc/${member.id}/verify`, { method: 'POST' });
-                                                        if (res.ok) {
-                                                            toast.success('KYC Verified');
-                                                            setPolicyMembers(prev => prev.map(p => {
-                                                                if (p.id === member.id) {
-                                                                    const updatedKyc = { ...kyc, admin_verified: true };
-                                                                    return { ...p, policy_holder_kyc: [updatedKyc] };
-                                                                }
-                                                                return p;
-                                                            }));
-                                                        } else {
-                                                            toast.error('Failed to verify');
-                                                        }
-                                                    }}>
-                                                        <Shield className="h-4 w-4 mr-2" /> Approve Verification
-                                                    </Button>
+                                            </div>
+
+                                            {/* Pending request banner */}
+                                            {hasPendingReq && (
+                                                <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+                                                    <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                                                    <div>
+                                                        <p className="font-semibold">Pending edit request from customer</p>
+                                                        <p className="text-xs mt-0.5">&ldquo;{member.pendingEditRequest.reason}&rdquo;</p>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
                                     ) : (
-                                        <p className="text-sm text-slate-500">KYC has not been submitted by this member yet.</p>
+                                        <div className="flex items-center gap-3 text-amber-700 bg-amber-50 rounded-xl p-4 border border-amber-200">
+                                            <ShieldAlert className="w-5 h-5 shrink-0" />
+                                            <p className="text-sm">KYC has not been submitted by this member yet. They will be prompted to fill it before accessing any services.</p>
+                                        </div>
                                     )}
                                 </CardContent>
                             </Card>
-                        )})
-                    )}
+                        );
+                    })}
                 </TabsContent>
+
+                {/* Admin KYC Direct Edit Modal */}
+                {kycEditModal.open && (
+                    <Dialog open={kycEditModal.open} onOpenChange={o => setKycEditModal(prev => ({ ...prev, open: o }))}>
+                        <DialogContent className="bg-white border-slate-200 max-w-lg">
+                            <DialogHeader>
+                                <div className="bg-gradient-to-r from-teal-600 to-cyan-600 -mx-6 -mt-6 px-6 py-5 rounded-t-lg mb-4">
+                                    <DialogTitle className="text-white text-lg flex items-center gap-2">
+                                        <Edit3 className="w-5 h-5" /> Edit KYC Details
+                                    </DialogTitle>
+                                    <p className="text-teal-100 text-sm mt-1">
+                                        {kycEditModal.member?.fullName} ({kycEditModal.member?.relation})
+                                    </p>
+                                </div>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                                <p className="text-xs text-slate-400">Leave fields blank to keep existing values.</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="col-span-2 space-y-1.5">
+                                        <Label>Full Name</Label>
+                                        <Input placeholder="Updated name..." value={kycEditForm.holderFullName} onChange={e => setKycEditForm(f => ({ ...f, holderFullName: e.target.value }))} />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Aadhaar Number</Label>
+                                        <Input placeholder="12 digits..." value={kycEditForm.aadhaarNumber} onChange={e => setKycEditForm(f => ({ ...f, aadhaarNumber: e.target.value.replace(/\D/g, '').slice(0, 12) }))} className="font-mono" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>PAN Number</Label>
+                                        <Input placeholder="ABCDE1234F" value={kycEditForm.panNumber} onChange={e => setKycEditForm(f => ({ ...f, panNumber: e.target.value.toUpperCase().slice(0, 10) }))} className="font-mono uppercase" />
+                                    </div>
+                                    <div className="col-span-2 space-y-1.5">
+                                        <Label>Admin Note</Label>
+                                        <Input placeholder="Reason for this change..." value={kycEditForm.adminNote} onChange={e => setKycEditForm(f => ({ ...f, adminNote: e.target.value }))} />
+                                    </div>
+                                </div>
+                            </div>
+                            <DialogFooter className="mt-2">
+                                <Button variant="outline" onClick={() => setKycEditModal({ open: false, member: null })}>Cancel</Button>
+                                <Button onClick={handleSaveAdminKyc} disabled={savingKyc} className="bg-teal-600 hover:bg-teal-700 text-white gap-2">
+                                    {savingKyc ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                                    Save Changes
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                )}
 
                 {/* ACTIVITY TAB */}
                 <TabsContent value="activity" className="mt-6">

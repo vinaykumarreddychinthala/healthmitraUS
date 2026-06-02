@@ -49,6 +49,10 @@ export interface Franchise {
     totalRevenue: number;
     aadhaarNumber?: string;
     panNumber?: string;
+    aadhaarFront?: string;
+    aadhaarBack?: string;
+    panCard?: string;
+    photo?: string;
 }
 
 export interface FranchiseModule {

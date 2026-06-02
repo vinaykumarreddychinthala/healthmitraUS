@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import {
     Loader2, Upload, CheckCircle, User, FileText,
-    ShieldCheck, ChevronRight, ChevronLeft, AlertCircle, Camera
+    ShieldCheck, ChevronRight, ChevronLeft, AlertCircle, Camera, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -62,6 +62,14 @@ export default function PolicyHolderKYCModal({
         } else {
             setPhotoPreview(null);
         }
+    };
+
+    const handlePreview = (e: React.MouseEvent, file: File | null) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        window.open(url, '_blank');
     };
 
     const canProceedStep1 = holderFullName.trim().length >= 2 && relation !== '';
@@ -224,13 +232,25 @@ export default function PolicyHolderKYCModal({
                                 <div className="space-y-2 pt-2">
                                     <Label className="text-slate-600 text-xs">Aadhaar Document Upload <span className="text-red-500">*</span></Label>
                                     <div className={`flex items-center justify-between border rounded-lg p-2 ${aadhaarDeclaration ? 'bg-slate-50 opacity-50' : 'bg-white'}`}>
-                                        <span className="text-xs text-slate-500 truncate max-w-[200px]">{aadhaarFile ? aadhaarFile.name : 'No file selected'}</span>
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <span className="text-xs text-slate-500 truncate max-w-[150px]">{aadhaarFile ? aadhaarFile.name : 'No file selected'}</span>
+                                            {aadhaarFile && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={(e) => handlePreview(e, aadhaarFile)} 
+                                                    className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 p-1 rounded transition-colors"
+                                                    title="Preview document"
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
                                         <Button 
                                             type="button" 
                                             variant="outline" 
                                             size="sm" 
                                             disabled={aadhaarDeclaration} 
-                                            className="h-7 text-xs cursor-pointer"
+                                            className="h-7 text-xs cursor-pointer shrink-0"
                                             asChild
                                         >
                                             <label>
@@ -279,13 +299,25 @@ export default function PolicyHolderKYCModal({
                                 <div className="space-y-2 pt-2">
                                     <Label className="text-slate-600 text-xs">PAN Document Upload <span className="text-red-500">*</span></Label>
                                     <div className={`flex items-center justify-between border rounded-lg p-2 ${panDeclaration ? 'bg-slate-50 opacity-50' : 'bg-white'}`}>
-                                        <span className="text-xs text-slate-500 truncate max-w-[200px]">{panFile ? panFile.name : 'No file selected'}</span>
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <span className="text-xs text-slate-500 truncate max-w-[150px]">{panFile ? panFile.name : 'No file selected'}</span>
+                                            {panFile && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={(e) => handlePreview(e, panFile)} 
+                                                    className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 p-1 rounded transition-colors"
+                                                    title="Preview document"
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
                                         <Button 
                                             type="button" 
                                             variant="outline" 
                                             size="sm" 
                                             disabled={panDeclaration} 
-                                            className="h-7 text-xs cursor-pointer"
+                                            className="h-7 text-xs cursor-pointer shrink-0"
                                             asChild
                                         >
                                             <label>
@@ -323,21 +355,42 @@ export default function PolicyHolderKYCModal({
                     {step === 3 && (
                         <div className="space-y-4">
                             <label
-                                className="block border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50/50 transition-all group"
+                                className="block border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50/50 transition-all group relative"
                             >
                                 {photoPreview ? (
                                     <div className="space-y-3">
                                         <img src={photoPreview} alt="Preview" className="w-32 h-32 object-cover rounded-xl mx-auto border-4 border-teal-200 shadow-lg" />
-                                        <p className="text-sm text-teal-600 font-medium">{photo?.name}</p>
-                                        <p className="text-xs text-slate-400">Click to change photo</p>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <p className="text-sm text-teal-600 font-medium">{photo?.name}</p>
+                                            <button 
+                                                type="button"
+                                                onClick={(e) => handlePreview(e, photo)}
+                                                className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 p-1 rounded transition-colors"
+                                                title="View full image"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-slate-400">Click anywhere to change photo</p>
                                     </div>
                                 ) : photo ? (
                                     <div className="space-y-2">
                                         <div className="w-20 h-20 bg-teal-100 rounded-xl flex items-center justify-center mx-auto">
                                             <FileText className="w-10 h-10 text-teal-600" />
                                         </div>
-                                        <p className="text-sm font-medium text-slate-700">{photo.name}</p>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <p className="text-sm font-medium text-slate-700">{photo.name}</p>
+                                            <button 
+                                                type="button"
+                                                onClick={(e) => handlePreview(e, photo)}
+                                                className="text-teal-600 hover:text-teal-700 hover:bg-teal-50 p-1 rounded transition-colors"
+                                                title="View PDF"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                         <p className="text-xs text-emerald-500">PDF uploaded ✓</p>
+                                        <p className="text-xs text-slate-400">Click anywhere to change document</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3">

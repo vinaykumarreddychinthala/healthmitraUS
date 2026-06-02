@@ -23,7 +23,8 @@ import {
     Mail,
     Bell,
     UserPlus,
-    TrendingUp
+    TrendingUp,
+    ShieldCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signout } from "@/app/actions/auth";
@@ -34,6 +35,7 @@ export const ADMIN_NAV_ITEMS = [
     { icon: FileText, label: 'Plans Management', href: '/admin/plans' },
     { icon: Users, label: 'User Management', href: '/admin/users' },
     { icon: UserPlus, label: 'Customer Management', href: '/admin/customers' },
+    { icon: ShieldCheck, label: 'KYC Requests', href: '/admin/kyc-requests' },
     { icon: MapPin, label: 'Locations', href: '/admin/locations' },
     { icon: LayoutTemplate, label: 'CMS Manager', href: '/admin/cms/pages' },
     { icon: Percent, label: 'Coupons', href: '/admin/coupons' },
@@ -50,6 +52,7 @@ export const ADMIN_NAV_ITEMS = [
     { icon: ClipboardCheck, label: 'Audit Trail', href: '/admin/audit' },
     { icon: Settings, label: 'Settings', href: '/admin/settings' },
 ];
+
 
 export function AdminSidebar() {
     const pathname = usePathname();

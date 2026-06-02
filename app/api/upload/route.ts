@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 const ALLOWED_BUCKETS = ['documents', 'images', 'avatars'];
 const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'heic', 'heif', 'webp', 'tiff', 'tif', 'bmp'];
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ 
                 success: false, 
                 error: `File type not allowed. Allowed: ${ALLOWED_EXTENSIONS.join(', ')}` 
-            }, { status: 400 });
+                }, { status: 400 });
         }
 
         // Validate file size
@@ -63,7 +63,9 @@ export async function POST(request: NextRequest) {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        const { error: uploadError } = await supabase.storage
+        // Use admin client to bypass storage RLS
+        const adminClient = await createAdminClient();
+        const { error: uploadError } = await adminClient.storage
             .from(bucket)
             .upload(filePath, buffer, {
                 cacheControl: '3600',
@@ -76,7 +78,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: uploadError.message }, { status: 500 });
         }
 
-        const { data: { publicUrl } } = supabase.storage
+        const { data: { publicUrl } } = adminClient.storage
             .from(bucket)
             .getPublicUrl(filePath);
 

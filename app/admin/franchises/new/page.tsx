@@ -11,20 +11,148 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-    ArrowLeft, Save, Building2, Shield
+    ArrowLeft, Save, Building2, Shield, Upload, X, FileText, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Franchise, DEFAULT_MODULES, FranchiseModule } from '@/types/franchise';
-import { createFranchise, assignModules } from '@/app/actions/franchise';
+import { createFranchise } from '@/app/actions/franchise';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+function DocumentUpload({
+    label,
+    value,
+    onChange,
+    bucket = 'documents',
+    folder = 'kyc'
+}: {
+    label: string;
+    value?: string;
+    onChange: (url: string) => void;
+    bucket?: string;
+    folder?: string;
+}) {
+    const [uploading, setUploading] = useState(false);
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('bucket', bucket);
+        formData.append('folder', folder);
+
+        try {
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+            if (data.success && data.data?.url) {
+                onChange(data.data.url);
+                toast.success(`${label} uploaded successfully`);
+            } else {
+                toast.error(data.error || 'Failed to upload document');
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error('Failed to upload document');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const getFileName = (url: string) => {
+        try {
+            const decoded = decodeURIComponent(url);
+            const parts = decoded.split('/');
+            const name = parts[parts.length - 1];
+            return name.replace(/^\d+-([a-z0-9]+-)?/, '');
+        } catch {
+            return 'Document';
+        }
+    };
+
+    const isImage = (url: string) => {
+        const ext = url.split('.').pop()?.toLowerCase();
+        return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '');
+    };
+
+    return (
+        <div className="space-y-2">
+            <Label className="text-slate-600 font-medium">{label}</Label>
+            {value ? (
+                <div className="flex items-center justify-between p-3 border border-emerald-200 bg-emerald-50/50 rounded-lg text-emerald-800 text-sm">
+                    <div className="flex items-center gap-3 truncate">
+                        {isImage(value) ? (
+                            <img src={value} alt="Preview" className="h-8 w-8 rounded object-cover border border-emerald-200 shrink-0" />
+                        ) : (
+                            <FileText className="h-4 w-4 text-emerald-600 shrink-0" />
+                        )}
+                        <a
+                            href={value}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium truncate hover:underline hover:text-emerald-950 flex items-center gap-1.5"
+                            title="Click to view document"
+                        >
+                            {getFileName(value)}
+                            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">View</span>
+                        </a>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => onChange('')}
+                        className="p-1 rounded-full hover:bg-emerald-100 text-emerald-600 transition-colors shrink-0 ml-2"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+            ) : (
+                <div className="relative">
+                    <input
+                        type="file"
+                        onChange={handleFileChange}
+                        disabled={uploading}
+                        className="hidden"
+                        id={`upload-${label.replace(/\s+/g, '-').toLowerCase()}`}
+                        accept=".jpg,.jpeg,.png,.pdf"
+                    />
+                    <label
+                        htmlFor={`upload-${label.replace(/\s+/g, '-').toLowerCase()}`}
+                        className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-teal-500 hover:bg-slate-50 transition-all text-sm font-medium text-slate-600
+                            ${uploading ? 'pointer-events-none opacity-50 bg-slate-50' : ''}`}
+                    >
+                        {uploading ? (
+                            <>
+                                <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
+                                <span>Uploading...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Upload className="h-4 w-4 text-slate-400" />
+                                <span>Upload Document (PDF or Image)</span>
+                            </>
+                        )}
+                    </label>
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function AddFranchisePage() {
+    const router = useRouter();
+    const [saving, setSaving] = useState(false);
     const [franchise, setFranchise] = useState<Partial<Franchise>>({
         name: '', startDate: '', endDate: '', contact: '', altContact: '',
         email: '', password: '', referralCode: '', website: '', gst: '',
         commissionPercent: 10, kycStatus: 'pending', verificationStatus: 'unverified',
         address: '', city: '', state: '', payoutDelay: 7, status: 'active',
         aadhaarNumber: '', panNumber: '',
+        aadhaarFront: '', aadhaarBack: '', panCard: '', photo: '',
     });
 
     const [modules, setModules] = useState<FranchiseModule[]>(
@@ -43,12 +171,19 @@ export default function AddFranchisePage() {
         if (!franchise.name || !franchise.email || !franchise.referralCode || !franchise.contact) {
             toast.error('Please fill in required fields'); return;
         }
-        const res = await createFranchise(franchise);
+        setSaving(true);
+        const hasDocs = franchise.aadhaarFront || franchise.aadhaarBack || franchise.panCard || franchise.photo;
+        const res = await createFranchise({
+            ...franchise,
+            kycStatus: hasDocs ? 'submitted' : 'pending'
+        });
         if (res.success) {
             toast.success('Franchise created successfully');
+            router.push('/admin/franchises');
         } else {
             toast.error(res.error || 'Failed to create franchise');
         }
+        setSaving(false);
     };
 
     return (
@@ -63,8 +198,8 @@ export default function AddFranchisePage() {
                         <p className="text-sm text-slate-500">Fill in all details to register a new franchise partner.</p>
                     </div>
                 </div>
-                <Button onClick={handleSave} className="bg-teal-600 hover:bg-teal-700 text-white">
-                    <Save className="mr-2 h-4 w-4" /> Save Franchise
+                <Button onClick={handleSave} disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white">
+                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Save Franchise
                 </Button>
             </div>
 
@@ -148,6 +283,13 @@ export default function AddFranchisePage() {
                     <div className="grid grid-cols-2 gap-4">
                         <Field label="Aadhaar Number" value={franchise.aadhaarNumber} onChange={v => update({ aadhaarNumber: v })} placeholder="XXXX XXXX XXXX" />
                         <Field label="PAN Number" value={franchise.panNumber} onChange={v => update({ panNumber: v })} placeholder="ABCDE1234F" />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-100 pt-4">
+                        <DocumentUpload label="Aadhaar Front Document" value={franchise.aadhaarFront} onChange={url => update({ aadhaarFront: url })} />
+                        <DocumentUpload label="Aadhaar Back Document" value={franchise.aadhaarBack} onChange={url => update({ aadhaarBack: url })} />
+                        <DocumentUpload label="PAN Card Document" value={franchise.panCard} onChange={url => update({ panCard: url })} />
+                        <DocumentUpload label="Franchise Photo" value={franchise.photo} onChange={url => update({ photo: url })} />
                     </div>
                 </CardContent>
             </Card>

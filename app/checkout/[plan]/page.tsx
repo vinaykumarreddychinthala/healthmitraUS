@@ -92,7 +92,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                 const intentRes = await fetch('/api/stripe/create-payment-intent', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ planId, amount: p.data?.price }),
+                    body: JSON.stringify({ planId, amount: p.data?.price, guestEmail: info.email }),
                 });
                 const intentData = await intentRes.json();
                 setStripeSettings({ enabled: true, publishableKey: stripe.data.publishableKey, clientSecret: intentData.clientSecret });

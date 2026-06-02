@@ -27,6 +27,7 @@ export interface ECardMember {
     aadhaarLast4?: string;
     mobile?: string;
     email?: string;
+    kycSubmitted?: boolean;
 }
 
 export interface ECardGenerationState {

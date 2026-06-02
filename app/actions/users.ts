@@ -2,6 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { User, UserType } from '@/types/user';
+import { sendMail } from '@/lib/email';
 
 // --- USER ACTIONS ---
 
@@ -33,7 +34,13 @@ export async function getUsers(filters: GetUsersFilters) {
             'Employee': 'employee'
         };
         const role = roleMap[filters.type];
-        if (role) query = query.eq('role', role);
+        if (role) {
+            if (role === 'user') {
+                query = query.in('role', ['user', 'customer']);
+            } else {
+                query = query.eq('role', role);
+            }
+        }
     }
 
     if (filters.status && filters.status !== 'all') {
@@ -56,7 +63,7 @@ export async function getUsers(filters: GetUsersFilters) {
     const { count: adminCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'admin');
     const { count: employeeCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'employee');
     const { count: partnerCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'franchise_owner');
-    const { count: customerCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'user');
+    const { count: customerCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).in('role', ['user', 'customer']);
     const { count: activeCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'active');
     const { count: potentialCount } = await supabase.from('otp_verifications').select('*', { count: 'exact', head: true }).eq('converted', false);
 
@@ -242,6 +249,31 @@ export async function createUser(data: Partial<User> & { departmentId?: string; 
         return { success: false, error: profileError.message };
     }
 
+    // Send welcome email with credentials
+    if (data.email) {
+        try {
+            await sendMail({
+                to: data.email,
+                subject: 'Welcome to HealthMitra - Account Created',
+                devData: { 'Email': data.email, 'Password': tempPassword },
+                html: `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: auto;">
+                        <p>Dear ${data.name || 'User'},</p>
+                        <p>An account has been created for you on HealthMitra.</p>
+                        <p>Here are your login credentials:</p>
+                        <ul>
+                            <li><strong>User ID / Email:</strong> ${data.email}</li>
+                            <li><strong>Password:</strong> ${tempPassword}</li>
+                        </ul>
+                        <p>Please login at <a href="https://www.healthmitraus.com">www.healthmitraus.com</a>.</p>
+                    </div>
+                `
+            });
+        } catch (mailError) {
+            console.error('Error sending welcome email:', mailError);
+        }
+    }
+
     return { success: true, message: 'User created successfully', tempPassword };
 }
 
@@ -358,10 +390,30 @@ export async function resendCredentials(id: string, method: 'whatsapp' | 'email'
         entity_id: id,
     });
 
-    // In production, you would integrate with:
-    // - Email: SendGrid, AWS SES, Resend, etc.
-    // - WhatsApp: Twilio, MSG91, etc.
-    
+    if (method === 'email' && profile.email) {
+        try {
+            await sendMail({
+                to: profile.email,
+                subject: 'Your HealthMitra Credentials Reset',
+                devData: { 'Email': profile.email, 'Password': tempPassword },
+                html: `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: auto;">
+                        <p>Dear ${profile.full_name || 'User'},</p>
+                        <p>Your password has been reset by the administrator.</p>
+                        <p>Here are your updated login credentials:</p>
+                        <ul>
+                            <li><strong>User ID / Email:</strong> ${profile.email}</li>
+                            <li><strong>Password:</strong> ${tempPassword}</li>
+                        </ul>
+                        <p>Please login at <a href="https://www.healthmitraus.com">www.healthmitraus.com</a> and change your password.</p>
+                    </div>
+                `
+            });
+        } catch (mailError) {
+            console.error('Error sending reset credentials email:', mailError);
+        }
+    }
+
     // For now, we'll return success and the method used
     return { 
         success: true, 

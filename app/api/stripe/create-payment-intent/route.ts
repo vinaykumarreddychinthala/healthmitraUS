@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
 import { validatePromoCode } from '@/app/actions/coupons';
 
 export async function POST(request: Request) {
     try {
-        const supabase = await createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (!user) {
-            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const { planId, amount, promoCode } = await request.json();
+        const { planId, amount, promoCode, guestEmail } = await request.json();
 
         // Get Stripe settings
         const adminClient = await createAdminClient();
@@ -27,8 +20,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: false, error: 'Stripe not configured or enabled' }, { status: 400 });
         }
 
-        // Validate plan and amount
-        const { data: plan } = await supabase.from('plans').select('*').eq('id', planId).single();
+        // Validate plan and amount server-side
+        const { data: plan } = await adminClient.from('plans').select('*').eq('id', planId).single();
         if (!plan) return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
 
         let finalAmount = plan.price;
@@ -39,7 +32,7 @@ export async function POST(request: Request) {
             }
         }
 
-        // Security check
+        // Security check — log if client amount differs but don't reject (server value is authoritative)
         if (Math.abs(finalAmount - amount) > 0.01) {
             console.error('Price mismatch in Stripe payment creation:', { finalAmount, amount });
         }
@@ -51,14 +44,13 @@ export async function POST(request: Request) {
         const paymentIntent = await stripe.paymentIntents.create({
             amount: Math.round(finalAmount * 100),
             currency: 'usd',
+            receipt_email: guestEmail || undefined,
             metadata: {
                 planId,
-                userId: user.id,
+                guestEmail: guestEmail || '',
                 promoCode: promoCode || '',
             },
-            automatic_payment_methods: {
-                enabled: true,
-            },
+            payment_method_types: ['card'],
         });
 
         return NextResponse.json({

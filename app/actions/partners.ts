@@ -194,6 +194,7 @@ export async function getPartner(id: string) {
 
 export async function createPartner(data: Partial<Partner>) {
     const supabase = await createAdminClient();
+    const hasDocs = data.aadhaarFront || data.aadhaarBack || data.panCard || data.photo;
     const { error } = await supabase.from('franchises').insert({
         franchise_name: data.name,
         contact_email: data.email,
@@ -209,9 +210,14 @@ export async function createPartner(data: Partial<Partner>) {
         can_add_sub_partners: data.canAddSubPartners,
         designation_access: data.designationAccess,
         status: 'active',
-        verification_status: 'pending',
         aadhaar_number: data.aadhaarNumber,
-        pan_number: data.panNumber
+        pan_number: data.panNumber,
+        aadhaar_front: data.aadhaarFront,
+        aadhaar_back: data.aadhaarBack,
+        pan_card: data.panCard,
+        photo: data.photo,
+        kyc_status: data.kycStatus || (hasDocs ? 'submitted' : 'pending'),
+        verification_status: hasDocs ? 'in_review' : 'pending'
     });
 
     if (error) return { success: false, error: error.message };

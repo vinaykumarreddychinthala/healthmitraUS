@@ -18,10 +18,14 @@ CREATE TABLE IF NOT EXISTS policy_holder_kyc (
     -- Aadhaar (either number OR declaration)
     aadhaar_number       TEXT,                      -- 12-digit, NULL if declaration used
     aadhaar_declaration  BOOLEAN NOT NULL DEFAULT false,  -- true = no aadhaar, self-declared
+    aadhaar_file_url     TEXT,
+    aadhaar_file_path    TEXT,
 
     -- PAN (either number OR declaration)
     pan_number           TEXT,                      -- 10-char, NULL if declaration used
     pan_declaration      BOOLEAN NOT NULL DEFAULT false,  -- true = no pan, self-declared
+    pan_file_url         TEXT,
+    pan_file_path        TEXT,
 
     -- Photo
     photo_url            TEXT NOT NULL,             -- Supabase Storage public URL

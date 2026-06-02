@@ -266,6 +266,7 @@ export async function POST(request: Request) {
             await sendMail({
                 to: email,
                 subject: `Welcome to HealthMitra — Your Login Credentials`,
+                devData: { 'User ID': generatedUserId, 'Password': generatedPassword, 'Email': email },
                 html: welcomeTemplate({ name, userId: generatedUserId, password: generatedPassword, planName: plan.name, amount: finalAmount, transactionId: finalTransactionId })
             });
         }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
+import { Turnstile } from "@/components/ui/turnstile"
 
 export default function ContactPage() {
     const [formData, setFormData] = useState({
@@ -18,6 +19,7 @@ export default function ContactPage() {
     })
     const [submitted, setSubmitted] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [turnstileToken, setTurnstileToken] = useState<string>('')
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -27,7 +29,7 @@ export default function ContactPage() {
             const res = await fetch('/api/contact', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({ ...formData, turnstileToken })
             })
             const data = await res.json()
 
@@ -38,6 +40,7 @@ export default function ContactPage() {
                 toast.success('Message sent successfully! We\'ll get back to you soon.')
                 setTimeout(() => setSubmitted(false), 5000)
                 setFormData({ name: '', email: '', phone: '', subject: '', message: '' })
+                setTurnstileToken('')
             }
         } catch (error) {
             toast.error('Failed to send message. Please try again.')
@@ -218,7 +221,9 @@ export default function ContactPage() {
                                         />
                                     </div>
 
-                                    <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90" disabled={loading}>
+                                    <Turnstile onVerify={(token) => setTurnstileToken(token)} />
+
+                                    <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90" disabled={loading || !turnstileToken}>
                                         {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                                         {loading ? 'Sending...' : 'Send Message'}
                                     </Button>

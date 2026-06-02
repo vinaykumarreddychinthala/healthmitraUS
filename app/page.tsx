@@ -221,8 +221,8 @@ export default async function Home() {
                 </h1>
 
                 <p className="text-lg md:text-xl text-slate-600 leading-relaxed max-w-xl">
-                  Comprehensive health plans with doctor consultations, medicine
-                  delivery, emergency support, and personalized care for your
+                  Comprehensive health plans with doctor consultations,
+                  emergency support, and personalized care for your
                   loved ones.
                 </p>
 

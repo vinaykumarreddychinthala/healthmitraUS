@@ -41,6 +41,7 @@ export async function POST(request: Request) {
         const emailResult = await sendMail({
             to: email,
             subject: 'Your HealthMitra OTP Code',
+            devData: { 'OTP': otp, 'For': email },
             html: `
                 <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
                     <h2 style="color: #0891b2; text-align: center;">Verify Your Email</h2>

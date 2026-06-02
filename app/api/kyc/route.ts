@@ -87,13 +87,9 @@ export async function POST(request: Request) {
             : photoFile.type === 'image/png' ? 'png' : 'jpg';
         const photoPath = `${user.id}/${memberId}/photo_${Date.now()}.${ext}`;
 
-        // Convert ArrayBuffer → Buffer (required for Node.js Supabase SDK)
-        const photoArrayBuffer = await photoFile.arrayBuffer();
-        const photoBuffer = Buffer.from(photoArrayBuffer);
-
         const { error: uploadError } = await adminClient.storage
             .from('member-photos')
-            .upload(photoPath, photoBuffer, {
+            .upload(photoPath, photoFile, {
                 contentType: photoFile.type,
                 upsert: true,
             });
@@ -112,9 +108,8 @@ export async function POST(request: Request) {
             if (!file) return { url: null, path: null };
             const ext = file.type === 'application/pdf' ? 'pdf' : file.type === 'image/png' ? 'png' : 'jpg';
             const path = `${user.id}/${memberId}/${prefix}_${Date.now()}.${ext}`;
-            const buffer = Buffer.from(await file.arrayBuffer());
             
-            const { error } = await adminClient.storage.from('member-photos').upload(path, buffer, { contentType: file.type, upsert: true });
+            const { error } = await adminClient.storage.from('member-photos').upload(path, file, { contentType: file.type, upsert: true });
             if (error) throw new Error(`Failed to upload ${prefix}`);
             
             const { data: { publicUrl } } = adminClient.storage.from('member-photos').getPublicUrl(path);
@@ -156,9 +151,11 @@ export async function POST(request: Request) {
         };
 
         if (existingKyc) {
-            await adminClient.from('policy_holder_kyc').update(kycPayload).eq('id', existingKyc.id);
+            const { error: updateError } = await adminClient.from('policy_holder_kyc').update(kycPayload).eq('id', existingKyc.id);
+            if (updateError) throw updateError;
         } else {
-            await adminClient.from('policy_holder_kyc').insert({ ...kycPayload, created_at: now });
+            const { error: insertError } = await adminClient.from('policy_holder_kyc').insert({ ...kycPayload, created_at: now });
+            if (insertError) throw insertError;
         }
 
         // Update the corresponding ecard_members record

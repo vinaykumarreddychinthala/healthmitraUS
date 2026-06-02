@@ -361,6 +361,9 @@ export async function POST(request: Request) {
     await sendMail({
         to: user.email,
         subject: `Welcome to ${plan.name} - HealthMitra`,
+        devData: isFirstTimeUser
+            ? { 'User ID': generatedUserId, 'Password': generatedPassword, 'Email': user.email }
+            : { 'Email': user.email, 'Note': 'Existing user — password unchanged' },
         html: welcomeTemplate({
             name,
             email: user.email,

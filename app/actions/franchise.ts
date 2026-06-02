@@ -160,6 +160,7 @@ export async function getFranchise(id: string) {
 export async function createFranchise(data: Partial<Franchise>) {
     const supabase = await createAdminClient();
 
+    const hasDocs = data.aadhaarFront || data.aadhaarBack || data.panCard || data.photo;
     const { error } = await supabase.from('franchises').insert({
         franchise_name: data.name,
         code: data.referralCode,
@@ -172,7 +173,13 @@ export async function createFranchise(data: Partial<Franchise>) {
         commission_percentage: data.commissionPercent,
         status: 'active',
         aadhaar_number: data.aadhaarNumber,
-        pan_number: data.panNumber
+        pan_number: data.panNumber,
+        aadhaar_front: data.aadhaarFront,
+        aadhaar_back: data.aadhaarBack,
+        pan_card: data.panCard,
+        photo: data.photo,
+        kyc_status: data.kycStatus || (hasDocs ? 'submitted' : 'pending'),
+        verification_status: hasDocs ? 'in_review' : 'unverified'
     });
 
     if (error) return { success: false, error: error.message };
