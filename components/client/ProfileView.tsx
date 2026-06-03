@@ -13,12 +13,17 @@ interface ProfileViewProps {
 
 type TabType = 'personal' | 'address' | 'bank' | 'kyc' | 'security' | 'preferences';
 
-const INDIAN_STATES = [
-    'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat',
-    'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh',
-    'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
-    'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'
+const US_STATES = [
+    'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut',
+    'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa',
+    'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan',
+    'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
+    'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio',
+    'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
+    'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia',
+    'Wisconsin', 'Wyoming'
 ];
+
 
 const InputField = ({ label, name, type = 'text', required = false, disabled = false, placeholder = '', maxLength, icon: Icon, formData, handleChange, errors, isEditing, ...props }: any) => (
     <div className="space-y-2">
@@ -171,18 +176,18 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
         // NO COMPULSORY FIELDS - Everything is optional for new users
         // Only validate format if fields are filled (optional validation)
 
-        // Phone validation (only if filled)
-        if (formData.phone.trim()) {
-            const cleanPhone = formData.phone.replace(/[\s\-\+\(\)]/g, '');
-            if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
-                newErrors.phone = 'Invalid phone number (10 digits required)';
-            }
+        // Phone validation (only if filled) - accept US/international formats
+        const cleanPhone = formData.phone.replace(/[\s\-\+\(\)\.]/g, '');
+        if (cleanPhone && (cleanPhone.length < 7 || cleanPhone.length > 15 || !/^\d+$/.test(cleanPhone))) {
+            newErrors.phone = 'Enter a valid phone number (7-15 digits)';
         }
 
-        // Pincode validation (only if filled)
-        if (formData.pincode && !/^\d{6}$/.test(formData.pincode)) {
-            newErrors.pincode = 'Pincode must be 6 digits';
+
+        // Zip/Pincode validation (only if filled) - US zip is 5 digits
+        if (formData.pincode && !/^\d{4,10}(-\d{4})?$/.test(formData.pincode)) {
+            newErrors.pincode = 'Enter a valid zip/postal code';
         }
+
 
         // Bank validation (only if filled)
         if (formData.bank_account_number && formData.bank_confirm_account && 
@@ -504,7 +509,7 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                                         className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-70 disabled:cursor-not-allowed ${errors.state ? 'border-red-300' : 'border-slate-200'}`}
                                     >
                                         <option value="">Select State</option>
-                                        {INDIAN_STATES.map(state => (
+                                        {US_STATES.map(state => (
                                             <option key={state} value={state}>{state}</option>
                                         ))}
                                     </select>
@@ -516,7 +521,7 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                                     <label className="text-sm font-medium text-slate-700">Country</label>
                                     <input
                                         type="text"
-                                        value="India"
+                                        value="United States"
                                         disabled
                                         className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed"
                                     />

@@ -192,7 +192,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
             <div className="flex items-center gap-4">
                 {/* Mobile Menu */}
                 <Sheet>
-                    <SheetTrigger className="md:hidden inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 w-9">
+                    <SheetTrigger suppressHydrationWarning className="md:hidden inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 w-9">
                         <Menu className="size-6 text-slate-700" />
                         <span className="sr-only">Toggle menu</span>
                     </SheetTrigger>
@@ -259,7 +259,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
                 {/* Notifications */}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="relative text-slate-600 hover:bg-slate-100">
+                        <Button suppressHydrationWarning variant="ghost" size="icon" className="relative text-slate-600 hover:bg-slate-100">
                             <Bell className="size-5" />
                             {unreadCount > 0 && (
                                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white ring-2 ring-white">
@@ -335,7 +335,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
                 {/* User Menu */}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                        <Button suppressHydrationWarning variant="ghost" className="relative h-9 w-9 rounded-full">
                             <Avatar className="h-9 w-9 border border-slate-200">
                                 <AvatarImage src={user?.avatar} alt={userName} />
                                 <AvatarFallback className="bg-teal-50 text-teal-700">{userInitials}</AvatarFallback>

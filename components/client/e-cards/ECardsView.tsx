@@ -35,7 +35,7 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
         name: c.member_name || c.name || 'Unknown',
         relation: c.relation || 'Self',
         dob: c.dob,
-        age: c.age,
+        age: c.dob ? Math.floor((new Date().getTime() - new Date(c.dob).getTime()) / 31557600000) : c.age,
         gender: c.gender,
         bloodGroup: c.blood_group,
         memberId: c.member_id,

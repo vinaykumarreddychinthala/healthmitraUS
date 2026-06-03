@@ -62,17 +62,17 @@ export async function updateUserProfile(formData: Record<string, any>) {
     }
 
     updates.updated_at = new Date().toISOString();
+    // Include the user id so upsert can create a row if one doesn't exist yet
+    updates.id = user.id;
 
-    // Use admin client to bypass RLS
+    // Use upsert so new users without a profile row get one created
     const { error } = await adminClient.from('profiles')
-        .update(updates)
-        .eq('id', user.id);
+        .upsert(updates, { onConflict: 'id' });
 
     if (error) {
         // Fallback: try regular client
         const { error: fallbackError } = await supabase.from('profiles')
-            .update(updates)
-            .eq('id', user.id);
+            .upsert(updates, { onConflict: 'id' });
         
         if (fallbackError) return { success: false, error: fallbackError.message };
     }

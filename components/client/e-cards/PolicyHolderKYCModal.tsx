@@ -39,6 +39,9 @@ export default function PolicyHolderKYCModal({
     // Form state
     const [holderFullName, setHolderFullName] = useState('');
     const [relation, setRelation] = useState('');
+    const [dob, setDob] = useState('');
+    const [gender, setGender] = useState('');
+    const [bloodGroup, setBloodGroup] = useState('');
     const [aadhaarNumber, setAadhaarNumber] = useState('');
     const [aadhaarDeclaration, setAadhaarDeclaration] = useState(false);
     const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
@@ -72,13 +75,13 @@ export default function PolicyHolderKYCModal({
         window.open(url, '_blank');
     };
 
-    const canProceedStep1 = holderFullName.trim().length >= 2 && relation !== '';
+    const canProceedStep1 = holderFullName.trim().length >= 2 && relation !== '' && dob !== '' && gender !== '' && bloodGroup !== '';
     const canProceedStep2 = (aadhaarDeclaration || (aadhaarNumber.replace(/\D/g, '').length === 12 && aadhaarFile)) 
         && (panDeclaration || (panNumber.length === 10 && panFile));
     const canProceedStep3 = photo !== null;
 
     const handleNext = () => {
-        if (step === 1 && !canProceedStep1) { toast.error('Please fill in your full name and relation'); return; }
+        if (step === 1 && !canProceedStep1) { toast.error('Please fill in all personal details'); return; }
         if (step === 2 && !canProceedStep2) {
             if (!aadhaarDeclaration) {
                 if (aadhaarNumber.replace(/\D/g, '').length !== 12) {
@@ -114,6 +117,9 @@ export default function PolicyHolderKYCModal({
             formData.append('memberId', memberId);
             formData.append('holderFullName', holderFullName.trim());
             formData.append('relation', relation);
+            formData.append('dob', dob);
+            formData.append('gender', gender);
+            formData.append('bloodGroup', bloodGroup);
             formData.append('aadhaarNumber', aadhaarNumber.replace(/\D/g, ''));
             formData.append('aadhaarDeclaration', aadhaarDeclaration.toString());
             if (aadhaarFile) formData.append('aadhaarFile', aadhaarFile);
@@ -196,18 +202,62 @@ export default function PolicyHolderKYCModal({
                                 />
                                 <p className="text-xs text-slate-400">Enter your legal name exactly as it appears on your ID documents</p>
                             </div>
-                            <div className="space-y-2">
-                                <Label className="text-slate-700 font-medium">
-                                    Relation with Profile Holder <span className="text-red-500">*</span>
-                                </Label>
-                                <Select value={relation} onValueChange={setRelation}>
-                                    <SelectTrigger className="h-11">
-                                        <SelectValue placeholder="Select relation..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {RELATIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label className="text-slate-700 font-medium">
+                                        Relation with Profile Holder <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Select value={relation} onValueChange={setRelation}>
+                                        <SelectTrigger className="h-11">
+                                            <SelectValue placeholder="Select relation..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {RELATIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-slate-700 font-medium">
+                                        Date of Birth <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Input
+                                        type="date"
+                                        value={dob}
+                                        onChange={e => setDob(e.target.value)}
+                                        className="h-11"
+                                        max={new Date().toISOString().split('T')[0]}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-slate-700 font-medium">
+                                        Gender <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Select value={gender} onValueChange={setGender}>
+                                        <SelectTrigger className="h-11">
+                                            <SelectValue placeholder="Select gender..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="M">Male</SelectItem>
+                                            <SelectItem value="F">Female</SelectItem>
+                                            <SelectItem value="O">Other</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-slate-700 font-medium">
+                                        Blood Group <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Select value={bloodGroup} onValueChange={setBloodGroup}>
+                                        <SelectTrigger className="h-11">
+                                            <SelectValue placeholder="Select blood group..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
+                                                <SelectItem key={bg} value={bg}>{bg}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -424,6 +474,9 @@ export default function PolicyHolderKYCModal({
                                 {[
                                     { label: 'Full Name', value: holderFullName },
                                     { label: 'Relation', value: relation },
+                                    { label: 'DOB', value: dob },
+                                    { label: 'Gender', value: gender === 'M' ? 'Male' : gender === 'F' ? 'Female' : gender === 'O' ? 'Other' : '' },
+                                    { label: 'Blood Grp', value: bloodGroup },
                                     { label: 'Aadhaar', value: aadhaarDeclaration ? '✓ Self-declaration submitted' : aadhaarNumber },
                                     { label: 'PAN', value: panDeclaration ? '✓ Self-declaration submitted' : panNumber },
                                     { label: 'Photo', value: photo?.name || '-' },

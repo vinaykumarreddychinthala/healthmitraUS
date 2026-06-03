@@ -13,6 +13,9 @@ export async function POST(request: Request) {
         const memberId          = formData.get('memberId') as string;
         const holderFullName    = formData.get('holderFullName') as string;
         const relation          = formData.get('relation') as string;
+        const dob               = formData.get('dob') as string;
+        const gender            = formData.get('gender') as string;
+        const bloodGroup        = formData.get('bloodGroup') as string;
         const aadhaarNumber     = formData.get('aadhaarNumber') as string | null;
         const aadhaarDeclaration = formData.get('aadhaarDeclaration') === 'true';
         const panNumber         = formData.get('panNumber') as string | null;
@@ -22,8 +25,8 @@ export async function POST(request: Request) {
         const panFile           = formData.get('panFile') as File | null;
 
         // --- Validations ---
-        if (!memberId || !holderFullName || !relation) {
-            return NextResponse.json({ success: false, error: 'Full name, relation, and member ID are required' }, { status: 400 });
+        if (!memberId || !holderFullName || !relation || !dob || !gender || !bloodGroup) {
+            return NextResponse.json({ success: false, error: 'Full name, relation, dob, gender, blood group and member ID are required' }, { status: 400 });
         }
         if (!aadhaarDeclaration) {
             if (!aadhaarNumber || aadhaarNumber.replace(/\D/g, '').length !== 12) {
@@ -164,6 +167,9 @@ export async function POST(request: Request) {
             .update({
                 full_name: holderFullName.trim(),
                 relation: relation,
+                dob: dob,
+                gender: gender,
+                blood_group: bloodGroup,
                 status: 'active'
             })
             .eq('id', memberId);
