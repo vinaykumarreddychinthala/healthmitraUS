@@ -99,8 +99,7 @@ export default function ContactPage() {
                                     </div>
                                     <div>
                                         <h3 className="font-semibold mb-1">Email</h3>
-                                        <p className="text-muted-foreground">service@HealthMitraus.com</p>
-                                        <p className="text-muted-foreground">Service@HealthMitra.co.in</p>
+                                        <p className="text-muted-foreground">service@healthmitraus.com</p>
                                     </div>
                                 </div>
 
@@ -119,7 +118,7 @@ export default function ContactPage() {
                                         <div>
                                             <h3 className="font-semibold mb-1">India Office</h3>
                                             <p className="text-muted-foreground text-sm">
-                                                HealthMitra Systems AI Pvt Ltd,<br />
+                                                HealthMitra Systems Pvt Ltd,<br />
                                                 C/O JSS Academy of Technical Education,<br />
                                                 C-20/1, Sector 62, Noida,<br />
                                                 Uttar Pradesh 201309, India

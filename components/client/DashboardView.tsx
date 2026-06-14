@@ -6,6 +6,7 @@ import { QuickActions } from "@/components/client/QuickActions";
 import { ActivityFeed } from "@/components/client/ActivityFeed";
 import { NotificationsPanel } from "@/components/client/NotificationsPanel";
 import { DashboardData } from "@/types/dashboard";
+import { AlertTriangle, ArrowRight, CreditCard } from "lucide-react";
 
 // Empty-state fallback when API returns no data
 const DEFAULT_EMPTY_DATA: DashboardData = {
@@ -137,6 +138,40 @@ export function DashboardView({ initialData }: DashboardViewProps) {
                 </div>
             </div>
 
+            {/* 1b. Pending KYC Banner */}
+            {(() => {
+                const totalMembers = data.members?.totalMembers || 0;
+                const withCards = data.members?.withActiveCards || 0;
+                const pendingCount = totalMembers - withCards;
+                if (pendingCount <= 0) return null;
+                return (
+                    <div className="animate-fade-in-up rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 flex flex-col sm:flex-row sm:items-start gap-4" style={{ animationDelay: '60ms' }}>
+                        <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                            <AlertTriangle className="w-5 h-5 text-amber-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-amber-900 text-base mb-1">
+                                Complete Member Details to Access Services
+                            </h3>
+                            <p className="text-sm text-amber-800 leading-relaxed">
+                                To unlock and access all Dashboard Services, please complete the details for all ({totalMembers}) member{totalMembers !== 1 ? 's' : ''} included in your plan. ({pendingCount}) member profile{pendingCount !== 1 ? 's are' : ' is'} still pending completion. Fill in the required information to continue.
+                            </p>
+                            <p className="text-sm text-amber-700 font-semibold mt-2">
+                                Pending Profiles: ({pendingCount}) of ({totalMembers}) Member{totalMembers !== 1 ? 's' : ''} Remaining.
+                            </p>
+                            <Link
+                                href="/e-cards"
+                                className="inline-flex items-center gap-1.5 mt-3 text-sm font-bold text-amber-900 underline underline-offset-2 hover:text-amber-700 transition-colors"
+                            >
+                                <CreditCard className="w-4 h-4" />
+                                Download E-Card &amp; Complete Member Details
+                                <ArrowRight className="w-3.5 h-3.5" />
+                            </Link>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* 2. Quick Stats - Now with 8 cards */}
             <div className="animate-fade-in-up" style={{ animationDelay: '100ms' }}>
                 <QuickStats
@@ -166,6 +201,7 @@ export function DashboardView({ initialData }: DashboardViewProps) {
                     onMarkRead={markNotificationAsRead}
                 />
             </div>
+
         </div>
     );
 }

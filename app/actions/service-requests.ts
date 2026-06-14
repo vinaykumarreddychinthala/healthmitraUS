@@ -5,7 +5,16 @@ import { sendMail } from "@/lib/email";
 import { 
     customerTicketUploadedTemplate, 
     customerServiceApprovedTemplate,
-    adminBillUploadedTemplate
+    adminBillUploadedTemplate,
+    adminTicketUploadedRedemptionTemplate,
+    requestReceivedReimbursementTemplate,
+    requestReceivedDiagnosticTemplate,
+    requestReceivedMedicineTemplate,
+    requestReceivedCaretakerTemplate,
+    serviceRenderedReimbursementTemplate,
+    serviceRenderedDiagnosticTemplate,
+    serviceRenderedMedicineTemplate,
+    serviceRenderedCaretakerTemplate
 } from "@/lib/email-templates";
 
 // --- CLIENT ACTIONS ---
@@ -50,26 +59,40 @@ export async function createServiceRequest(data: { type: string; memberId?: stri
 
     if (!user) return { success: false, error: 'Not authenticated' };
 
-    // Validate access against user's active plans
-    const today = new Date().toISOString().split('T')[0];
-    const { data: memberPlans, error: planError } = await adminClient
-        .from('ecard_members')
-        .select('*, plans(allowed_services)')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .gte('valid_till', today)
-        .lte('valid_from', today);
-        
-    let allAllowedServices: string[] = [];
-    if (memberPlans && memberPlans.length > 0) {
-        memberPlans.forEach((m: any) => {
-            const planServices = m.plans?.allowed_services || [];
-            allAllowedServices = [...allAllowedServices, ...planServices];
-        });
-    }
+    // Service types that any authenticated user can access without a plan
+    const FREE_ACCESS_TYPES = ['general', 'emergency', 'voucher', 'support', 'companion', 'bill_reimbursement'];
 
-    if (!allAllowedServices.includes(data.type)) {
-        return { success: false, error: 'Unauthorized: You do not have an active subscription for this service.' };
+    if (!FREE_ACCESS_TYPES.includes(data.type)) {
+        // For plan-gated services, validate access against user's active plans
+        const today = new Date().toISOString().split('T')[0];
+        const { data: memberPlans } = await adminClient
+            .from('ecard_members')
+            .select('*, plans(allowed_services)')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+            .gte('valid_till', today)
+            .lte('valid_from', today);
+
+        let allAllowedServices: string[] = [];
+        if (memberPlans && memberPlans.length > 0) {
+            memberPlans.forEach((m: any) => {
+                const planServices = m.plans?.allowed_services || [];
+                allAllowedServices = [...allAllowedServices, ...planServices];
+            });
+        }
+
+        // If they have any active plan, allow all services (graceful fallback)
+        const hasActivePlan = memberPlans && memberPlans.length > 0;
+        const serviceAllowed = allAllowedServices.length === 0
+            ? hasActivePlan // If allowed_services is empty, any active plan grants access
+            : allAllowedServices.includes(data.type);
+
+        if (!serviceAllowed) {
+            return {
+                success: false,
+                error: 'You need an active health plan to book this service. Please purchase a plan first.'
+            };
+        }
     }
 
     // Generate request_id_display using UUID to avoid race conditions
@@ -106,27 +129,45 @@ export async function createServiceRequest(data: { type: string; memberId?: stri
     // Send acknowledgment email to customer
     try {
         if (user.email) {
+            const customerName = user.user_metadata?.full_name || user.email.split('@')[0];
+            let htmlContent = customerTicketUploadedTemplate({ customerName, type: data.type, ticketId: finalRequestId });
+            
+            if (data.type === 'reimbursement') {
+                htmlContent = requestReceivedReimbursementTemplate({ customerName });
+            } else if (data.type === 'diagnostic') {
+                htmlContent = requestReceivedDiagnosticTemplate({ customerName });
+            } else if (data.type === 'medicine' || data.type === 'pharmacy') {
+                htmlContent = requestReceivedMedicineTemplate({ customerName });
+            } else if (data.type === 'caretaker' || data.type === 'nursing') {
+                htmlContent = requestReceivedCaretakerTemplate({ customerName });
+            }
+
             await sendMail({
                 to: user.email,
                 subject: `Service Request Received - ${finalRequestId}`,
-                html: customerTicketUploadedTemplate({
-                    customerName: user.user_metadata?.full_name || user.email.split('@')[0],
-                    type: data.type,
-                    ticketId: finalRequestId
-                })
+                html: htmlContent
             });
         }
 
         // Notify Admin
-        await sendMail({
-            to: process.env.SMTP_FROM || 'admin@healthmitra.com',
-            subject: `New Service Request - ${finalRequestId}`,
-            html: adminBillUploadedTemplate({
+        const adminHtml = (data.type === 'reimbursement' || data.type === 'diagnostic' || data.type === 'medicine')
+            ? adminTicketUploadedRedemptionTemplate({
+                adminName: 'Admin',
+                customerName: user.user_metadata?.full_name || user.email || 'User',
+                type: data.type,
+                ticketId: finalRequestId
+              })
+            : adminBillUploadedTemplate({
                 adminName: 'Admin',
                 customerName: user.user_metadata?.full_name || user.email || 'User',
                 ticketId: finalRequestId,
                 type: data.type
-            })
+              });
+
+        await sendMail({
+            to: process.env.ADMIN_EMAIL || 'service@healthmitraus.com',
+            subject: `New Service Request - ${finalRequestId}`,
+            html: adminHtml
         });
     } catch (emailErr) {
         console.error('Failed to send service request emails:', emailErr);
@@ -295,7 +336,7 @@ export async function updateServiceRequestStatus(requestId: string, status: stri
             .eq('id', requestId)
             .single();
 
-        if (request) {
+        if (request && status === 'completed') {
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('email, full_name')
@@ -303,15 +344,28 @@ export async function updateServiceRequestStatus(requestId: string, status: stri
                 .single();
 
             if (profile?.email) {
+                const customerName = profile.full_name || profile.email.split('@')[0];
+                let htmlContent = customerServiceApprovedTemplate({
+                    customerName,
+                    type: request.type,
+                    ticketId: request.request_id_display,
+                    remarks: notes
+                });
+
+                if (request.type === 'reimbursement') {
+                    htmlContent = serviceRenderedReimbursementTemplate({ customerName });
+                } else if (request.type === 'diagnostic') {
+                    htmlContent = serviceRenderedDiagnosticTemplate({ customerName, freeText: notes });
+                } else if (request.type === 'medicine' || request.type === 'pharmacy') {
+                    htmlContent = serviceRenderedMedicineTemplate({ customerName, freeText: notes });
+                } else if (request.type === 'caretaker' || request.type === 'nursing') {
+                    htmlContent = serviceRenderedCaretakerTemplate({ customerName });
+                }
+
                 await sendMail({
                     to: profile.email,
                     subject: `Service Request Update - ${request.request_id_display}`,
-                    html: customerServiceApprovedTemplate({
-                        customerName: profile.full_name || profile.email.split('@')[0],
-                        type: request.type,
-                        ticketId: request.request_id_display,
-                        remarks: notes
-                    })
+                    html: htmlContent
                 });
             }
         }

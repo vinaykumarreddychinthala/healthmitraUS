@@ -26,27 +26,26 @@ interface MemberFormData {
     mobile: string;
 }
 
-// Helper function to format date consistently
+// Helper function to format date consistently as DD-MMM-YYYY
 function formatDate(dateString: string): string {
     if (!dateString) return '';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
     const day = date.getDate().toString().padStart(2, '0');
     const month = date.toLocaleString('en-US', { month: 'short' });
     const year = date.getFullYear();
     return `${day} ${month} ${year}`;
 }
 
-// Calculate age from DOB
-function calculateAge(dob: string): number {
-    if (!dob) return 0;
+// Calculate days remaining from today until expiry
+function getDaysRemaining(expiryDate: string): number {
+    if (!expiryDate) return 0;
     const today = new Date();
-    const birthDate = new Date(dob);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return age;
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDate);
+    expiry.setHours(0, 0, 0, 0);
+    const diff = expiry.getTime() - today.getTime();
+    return Math.max(0, Math.floor(diff / 86400000));
 }
 
 export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
@@ -196,7 +195,7 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                                 Members: <strong>{purchase.members_count ?? 1}</strong>/<strong>{purchase.max_members ?? 1}</strong>
                                             </span>
                                             <span className="flex items-center gap-1.5 text-teal-600 font-semibold">
-                                                Coverage: ${purchase.coverage_amount?.toLocaleString('en-IN')}
+                                                Coverage: No Limit
                                             </span>
                                             {/* Plan type badge */}
                                             {(purchase.max_members ?? 1) === 1 ? (
@@ -206,6 +205,12 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                             ) : (
                                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
                                                     👨‍👩‍👧‍👦 Multi Member · up to {purchase.max_members}
+                                                </span>
+                                            )}
+                                            {/* Days remaining */}
+                                            {purchase.expiry_date && (
+                                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
+                                                    ⏳ {getDaysRemaining(purchase.expiry_date)} days left
                                                 </span>
                                             )}
                                         </div>
@@ -372,6 +377,9 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                     <p className={`font-bold ${selectedPurchase.status === 'expired' ? 'text-red-600' : 'text-slate-800'}`}>
                                         {formatDate(selectedPurchase.expiry_date)}
                                     </p>
+                                    {selectedPurchase.status === 'active' && selectedPurchase.expiry_date && (
+                                        <p className="text-xs text-amber-600 font-semibold mt-1">⏳ {getDaysRemaining(selectedPurchase.expiry_date)} days left</p>
+                                    )}
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded-lg">
                                     <p className="text-xs text-slate-500 uppercase">Members</p>
@@ -381,21 +389,32 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                     </p>
                                 </div>
                                 <div className="p-4 bg-slate-50 rounded-lg">
-                                    <p className="text-xs text-slate-500 uppercase">Status</p>
-                                    <p className={`font-bold capitalize ${selectedPurchase.status === 'active' ? 'text-emerald-600' : 'text-red-600'}`}>
-                                        {selectedPurchase.status}
-                                    </p>
+                                    <p className="text-xs text-slate-500 uppercase">Coverage</p>
+                                    <p className="font-bold text-emerald-700 text-lg">No Limit</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">As per plan features</p>
                                 </div>
                             </div>
 
                             <div className="p-4 bg-slate-50 rounded-lg">
                                 <h4 className="font-semibold mb-3">Plan Benefits</h4>
                                 <ul className="space-y-2 text-sm text-slate-600">
-                                    <li className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500" /> Unlimited Doctor Consultations</li>
-                                    <li className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500" /> Medicine Discounts up to 25%</li>
-                                    <li className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500" /> Free Diagnostic Tests (up to $5,000)</li>
-                                    <li className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500" /> Emergency Ambulance Services</li>
-                                    <li className="flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500" /> 24x7 Health Support</li>
+                                    {(selectedPurchase.plan_features && selectedPurchase.plan_features.length > 0
+                                        ? selectedPurchase.plan_features
+                                        : [
+                                            'Cashless Hospitalization at 1000+ hospitals',
+                                            'OPD Coverage – Unlimited as per Plan',
+                                            'Unlimited Diagnostic Tests – 30% to 50% discount',
+                                            'Medicine Home Delivery on 30% discount',
+                                            'Free Annual Health Checkup (1 per member)',
+                                            'Unlimited Telemedicine Consultations',
+                                            'Emergency Ambulance Service',
+                                        ]
+                                    ).map((benefit: string, idx: number) => (
+                                        <li key={idx} className="flex items-center gap-2">
+                                            <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                                            {benefit}
+                                        </li>
+                                    ))}
                                 </ul>
                             </div>
 

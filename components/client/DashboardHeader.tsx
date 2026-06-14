@@ -10,7 +10,6 @@ import {
     Settings,
     HelpCircle,
     LogOut,
-    Stethoscope,
     Check,
     X,
     ExternalLink
@@ -198,9 +197,8 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
                     </SheetTrigger>
                     <SheetContent side="left" className="w-64 p-0">
                         <SheetHeader className="border-b border-slate-200 p-4">
-                            <SheetTitle className="flex items-center gap-2 text-primary">
-                                <Stethoscope className="size-6" />
-                                <span>Healthmitra</span>
+                            <SheetTitle className="flex items-center gap-2">
+                                <img src="/logo.jpg" alt="HealthMitra" className="h-10 w-auto" />
                             </SheetTitle>
                         </SheetHeader>
                         <div className="flex-1 overflow-y-auto py-4">
@@ -236,15 +234,8 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
                 </Sheet>
 
                 {/* Logo */}
-                <Link href="/dashboard" className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                        <h1 className="text-xl font-semibold text-slate-800">
-                            Health<span className="text-teal-600">mitra</span>
-                        </h1>
-                    </div>
-                    <span className="hidden text-xs text-slate-500 md:block">
-                        Your Health, Our Priority
-                    </span>
+                <Link href="/dashboard" className="flex items-center group">
+                    <img src="/logo.jpg" alt="HealthMitra" className="h-11 w-auto" />
                 </Link>
             </div>
 

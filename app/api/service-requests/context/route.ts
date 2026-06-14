@@ -52,6 +52,8 @@ export async function GET() {
                 valid_from,
                 valid_till,
                 status,
+                dob,
+                contact_number,
                 plans (
                     id,
                     name,
@@ -82,6 +84,7 @@ export async function GET() {
         // Group KYC records by member_id
         const kycByMemberId: Record<string, any[]> = {};
         for (const kyc of kycRecords || []) {
+            const memberInfo = members?.find((m) => m.id === kyc.member_id);
             if (!kycByMemberId[kyc.member_id]) kycByMemberId[kyc.member_id] = [];
             kycByMemberId[kyc.member_id].push({
                 kycId: kyc.id,
@@ -89,6 +92,8 @@ export async function GET() {
                 relation: kyc.relation,
                 photoUrl: kyc.photo_url || null,
                 memberId: kyc.member_id,
+                dob: memberInfo?.dob || null,
+                contactNumber: memberInfo?.contact_number || null,
             });
         }
 

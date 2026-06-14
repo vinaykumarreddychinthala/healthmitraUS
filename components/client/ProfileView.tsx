@@ -24,6 +24,20 @@ const US_STATES = [
     'Wisconsin', 'Wyoming'
 ];
 
+const COUNTRIES = [
+    'United States', 'Canada', 'United Kingdom', 'Australia', 'India', 'Germany', 'France',
+    'Japan', 'China', 'Brazil', 'Mexico', 'South Korea', 'Italy', 'Spain', 'Netherlands',
+    'Sweden', 'Norway', 'Denmark', 'Finland', 'Switzerland', 'Austria', 'Belgium',
+    'Portugal', 'Poland', 'Czech Republic', 'Hungary', 'Romania', 'Bulgaria', 'Croatia',
+    'Greece', 'Turkey', 'Russia', 'Ukraine', 'Israel', 'Saudi Arabia', 'UAE', 'Qatar',
+    'Kuwait', 'Bahrain', 'Oman', 'Jordan', 'Egypt', 'South Africa', 'Nigeria', 'Kenya',
+    'Ghana', 'Ethiopia', 'Tanzania', 'Uganda', 'Rwanda', 'Senegal', 'Morocco', 'Tunisia',
+    'Algeria', 'Libya', 'Sudan', 'Pakistan', 'Bangladesh', 'Sri Lanka', 'Nepal', 'Myanmar',
+    'Thailand', 'Vietnam', 'Philippines', 'Indonesia', 'Malaysia', 'Singapore', 'New Zealand',
+    'Argentina', 'Chile', 'Colombia', 'Peru', 'Venezuela', 'Ecuador', 'Bolivia', 'Paraguay',
+    'Uruguay', 'Cuba', 'Jamaica', 'Trinidad and Tobago', 'Other'
+];
+
 
 const InputField = ({ label, name, type = 'text', required = false, disabled = false, placeholder = '', maxLength, icon: Icon, formData, handleChange, errors, isEditing, ...props }: any) => (
     <div className="space-y-2">
@@ -55,9 +69,13 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    // Local object URLs for files just uploaded this session (for inline preview)
+    const [kycPreviews, setKycPreviews] = useState<Record<string, { url: string; name: string; size: string; isPdf: boolean }>>({});
 
     const [formData, setFormData] = useState({
         // Personal Info
+        avatar_url: profile?.avatar_url || '',
         full_name: profile?.full_name || '',
         email: profile?.email || '',
         phone: profile?.phone || '',
@@ -73,6 +91,7 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
         city: profile?.city || '',
         state: profile?.state || '',
         pincode: profile?.pincode || '',
+        country: profile?.country || 'United States',
         landmark: profile?.landmark || '',
         // Bank Details
         bank_holder_name: profile?.bank_holder_name || '',
@@ -109,10 +128,10 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
 
     // Real uploaded documents from PHR
     const [documents, setDocuments] = useState<{
-        aadhaar_front: { name: string; size: string; verified: boolean } | null;
-        aadhaar_back: { name: string; size: string; verified: boolean } | null;
-        pan_card: { name: string; size: string; verified: boolean } | null;
-        cancelled_cheque: { name: string; size: string; verified: boolean } | null;
+        aadhaar_front: { name: string; size: string; verified: boolean; url?: string } | null;
+        aadhaar_back: { name: string; size: string; verified: boolean; url?: string } | null;
+        pan_card: { name: string; size: string; verified: boolean; url?: string } | null;
+        cancelled_cheque: { name: string; size: string; verified: boolean; url?: string } | null;
     }>({
         aadhaar_front: null,
         aadhaar_back: null,
@@ -134,19 +153,21 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                 .from('phr_documents')
                 .select('*')
                 .eq('user_id', user.id)
-                .in('category', ['aadhaar', 'pan', 'bank']);
+                .in('category', ['aadhaar', 'pan', 'bank'])
+                .order('created_at', { ascending: false });
 
             if (phrDocs && phrDocs.length > 0) {
                 const docs: typeof documents = { aadhaar_front: null, aadhaar_back: null, pan_card: null, cancelled_cheque: null };
+                // Since it's ordered by newest first, we only process the first one of each type
                 phrDocs.forEach((doc: any) => {
-                    if (doc.category === 'aadhaar' && doc.name?.includes('front')) {
-                        docs.aadhaar_front = { name: doc.name || '', size: String(doc.file_size || ''), verified: doc.is_verified || false };
-                    } else if (doc.category === 'aadhaar' && doc.name?.includes('back')) {
-                        docs.aadhaar_back = { name: doc.name || '', size: String(doc.file_size || ''), verified: doc.is_verified || false };
-                    } else if (doc.category === 'pan') {
-                        docs.pan_card = { name: doc.name || '', size: String(doc.file_size || ''), verified: doc.is_verified || false };
-                    } else if (doc.category === 'bank') {
-                        docs.cancelled_cheque = { name: doc.name || '', size: String(doc.file_size || ''), verified: doc.is_verified || false };
+                    if (doc.category === 'aadhaar' && doc.name?.includes('front') && !docs.aadhaar_front) {
+                        docs.aadhaar_front = { name: doc.name || '', size: String(doc.file_size || ''), verified: doc.is_verified || false, url: doc.file_url };
+                    } else if (doc.category === 'aadhaar' && doc.name?.includes('back') && !docs.aadhaar_back) {
+                        docs.aadhaar_back = { name: doc.name || '', size: String(doc.file_size || ''), verified: doc.is_verified || false, url: doc.file_url };
+                    } else if (doc.category === 'pan' && !docs.pan_card) {
+                        docs.pan_card = { name: doc.name || '', size: String(doc.file_size || ''), verified: doc.is_verified || false, url: doc.file_url };
+                    } else if (doc.category === 'bank' && !docs.cancelled_cheque) {
+                        docs.cancelled_cheque = { name: doc.name || '', size: String(doc.file_size || ''), verified: doc.is_verified || false, url: doc.file_url };
                     }
                 });
                 setDocuments(docs);
@@ -183,8 +204,8 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
         }
 
 
-        // Zip/Pincode validation (only if filled) - US zip is 5 digits
-        if (formData.pincode && !/^\d{4,10}(-\d{4})?$/.test(formData.pincode)) {
+        // Zip/Pincode validation (only if filled) - relaxed for global
+        if (formData.pincode && formData.pincode.length < 4) {
             newErrors.pincode = 'Enter a valid zip/postal code';
         }
 
@@ -270,6 +291,111 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
         }
     };
 
+    const handleKycUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string, category: string) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Create a local object URL immediately for inline preview
+        const localObjectUrl = URL.createObjectURL(file);
+        const fileSizeKb = `${Math.round(file.size / 1024)} KB`;
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+        toast.info(`Uploading ${type.replace('_', ' ')}...`, { id: 'upload' });
+        try {
+            // Use server-side upload API to bypass storage RLS
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', file);
+            uploadFormData.append('bucket', 'documents');
+            uploadFormData.append('folder', 'kyc');
+
+            const uploadRes = await fetch('/api/upload', {
+                method: 'POST',
+                body: uploadFormData,
+            });
+
+            const uploadJson = await uploadRes.json();
+            if (!uploadJson.success) throw new Error(uploadJson.error || 'Upload failed');
+
+            const publicUrl = uploadJson.data.url;
+
+            // Insert metadata via API route to bypass RLS
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated');
+
+            const metaRes = await fetch('/api/phr/upload-meta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: type,
+                    category,
+                    file_url: publicUrl,
+                    file_size: fileSizeKb,
+                }),
+            });
+
+            const metaJson = await metaRes.json();
+            if (!metaJson.success) throw new Error(metaJson.error || 'Metadata save failed');
+
+            // Store local preview for immediate display
+            setKycPreviews(prev => ({
+                ...prev,
+                [type]: { url: localObjectUrl, name: file.name, size: fileSizeKb, isPdf },
+            }));
+
+            toast.success('Document uploaded successfully', { id: 'upload' });
+
+            // Re-fetch documents from DB to update persistent state
+            const { data: phrDocs } = await supabase
+                .from('phr_documents')
+                .select('*')
+                .eq('user_id', user.id)
+                .in('category', ['aadhaar', 'pan', 'bank'])
+                .order('created_at', { ascending: false });
+
+            if (phrDocs) {
+                const docs: any = { aadhaar_front: null, aadhaar_back: null, pan_card: null, cancelled_cheque: null };
+                phrDocs.forEach((doc: any) => {
+                    if (doc.category === 'aadhaar' && doc.name?.includes('front') && !docs.aadhaar_front) docs.aadhaar_front = { name: doc.name, size: String(doc.file_size || ''), verified: doc.is_verified || false, url: doc.file_url };
+                    else if (doc.category === 'aadhaar' && doc.name?.includes('back') && !docs.aadhaar_back) docs.aadhaar_back = { name: doc.name, size: String(doc.file_size || ''), verified: doc.is_verified || false, url: doc.file_url };
+                    else if (doc.category === 'pan' && !docs.pan_card) docs.pan_card = { name: doc.name, size: String(doc.file_size || ''), verified: doc.is_verified || false, url: doc.file_url };
+                    else if (doc.category === 'bank' && !docs.cancelled_cheque) docs.cancelled_cheque = { name: doc.name, size: String(doc.file_size || ''), verified: doc.is_verified || false, url: doc.file_url };
+                });
+                setDocuments(docs);
+            }
+        } catch (error: any) {
+            // Revoke object URL on failure to avoid memory leak
+            URL.revokeObjectURL(localObjectUrl);
+            toast.error('Upload failed: ' + error.message, { id: 'upload' });
+        }
+    };
+
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        toast.info('Uploading photo...', { id: 'avatar-upload' });
+        try {
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', file);
+            uploadFormData.append('bucket', 'avatars');
+            uploadFormData.append('folder', 'profiles');
+
+            const uploadRes = await fetch('/api/upload', {
+                method: 'POST',
+                body: uploadFormData,
+            });
+
+            const uploadJson = await uploadRes.json();
+            if (!uploadJson.success) throw new Error(uploadJson.error || 'Upload failed');
+
+            setFormData(prev => ({ ...prev, avatar_url: uploadJson.data.url }));
+            toast.success('Photo uploaded! Click Save Changes to apply.', { id: 'avatar-upload' });
+        } catch (error: any) {
+            toast.error('Upload failed: ' + error.message, { id: 'avatar-upload' });
+        }
+    };
+
     const formatAadhaar = (value: string) => {
         const cleaned = value.replace(/\D/g, '').slice(0, 12);
         const parts = cleaned.match(/.{1,4}/g) || [];
@@ -282,7 +408,7 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
         { id: 'bank', label: 'Bank Details', icon: Building2 },
         { id: 'kyc', label: 'KYC', icon: FileText },
         { id: 'security', label: 'Security', icon: Shield },
-        { id: 'preferences', label: 'Preferences', icon: Bell },
+        // { id: 'preferences', label: 'Preferences', icon: Bell },
     ];
 
     // InputField moved outside
@@ -324,14 +450,21 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
             {/* Profile Header Card */}
             <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center gap-6">
                 <div className="relative">
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-white text-3xl font-bold border-4 border-white shadow-lg">
-                        {(formData.full_name || 'U').charAt(0).toUpperCase()}
-                    </div>
+                    {formData.avatar_url ? (
+                        <div className="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden">
+                            <img src={formData.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                        </div>
+                    ) : (
+                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-white text-3xl font-bold border-4 border-white shadow-lg">
+                            {(formData.full_name || 'U').charAt(0).toUpperCase()}
+                        </div>
+                    )}
                     {isEditing && (
                         <div className="absolute -bottom-2 -right-2">
-                            <button className="p-2.5 bg-teal-600 text-white rounded-full hover:bg-teal-700 transition-colors shadow-md border-2 border-white">
+                            <label className="p-2.5 bg-teal-600 text-white rounded-full hover:bg-teal-700 transition-colors shadow-md border-2 border-white cursor-pointer block">
+                                <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} />
                                 <Camera size={16} />
-                            </button>
+                            </label>
                         </div>
                     )}
                 </div>
@@ -356,12 +489,15 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                 </div>
                 {isEditing && (
                     <div className="flex flex-wrap justify-center md:justify-start gap-2 w-full md:w-auto mt-2 md:mt-0">
-                        <button className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex-1 md:flex-none">
+                        <label className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors flex-1 md:flex-none cursor-pointer text-center block">
+                            <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} />
                             Upload Photo
-                        </button>
-                        <button className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-1 md:flex-none">
-                            Remove
-                        </button>
+                        </label>
+                        {formData.avatar_url && (
+                            <button onClick={() => setFormData(prev => ({ ...prev, avatar_url: '' }))} className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-1 md:flex-none">
+                                Remove
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -497,34 +633,52 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <InputField formData={formData} handleChange={handleChange} errors={errors} isEditing={isEditing} label="City" name="city" placeholder="Ahmedabad" />
+                                <InputField formData={formData} handleChange={handleChange} errors={errors} isEditing={isEditing} label="City" name="city" placeholder="e.g., New York" />
 
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-slate-700">State</label>
-                                    <select
-                                        name="state"
-                                        value={formData.state}
-                                        onChange={handleChange}
-                                        disabled={!isEditing}
-                                        className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-70 disabled:cursor-not-allowed ${errors.state ? 'border-red-300' : 'border-slate-200'}`}
-                                    >
-                                        <option value="">Select State</option>
-                                        {US_STATES.map(state => (
-                                            <option key={state} value={state}>{state}</option>
-                                        ))}
-                                    </select>
+                                    {formData.country === 'United States' ? (
+                                        <select
+                                            name="state"
+                                            value={formData.state}
+                                            onChange={handleChange}
+                                            disabled={!isEditing}
+                                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                                        >
+                                            <option value="">Select State</option>
+                                            {US_STATES.map(s => (
+                                                <option key={s} value={s}>{s}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            name="state"
+                                            value={formData.state}
+                                            onChange={handleChange}
+                                            disabled={!isEditing}
+                                            placeholder="e.g., Ontario, Gujarat"
+                                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                                        />
+                                    )}
                                 </div>
 
-                                <InputField formData={formData} handleChange={handleChange} errors={errors} isEditing={isEditing} label="Pincode" name="pincode" placeholder="380015" maxLength={6} />
+                                <InputField formData={formData} handleChange={handleChange} errors={errors} isEditing={isEditing} label="Zip / Postal Code" name="pincode" placeholder="e.g., 90210" />
 
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-slate-700">Country</label>
-                                    <input
-                                        type="text"
-                                        value="United States"
-                                        disabled
-                                        className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed"
-                                    />
+                                    <select
+                                        name="country"
+                                        value={formData.country}
+                                        onChange={handleChange}
+                                        disabled={!isEditing}
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    >
+                                        <option value="">Select Country</option>
+                                        {COUNTRIES.map(c => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 <div className="md:col-span-2">
@@ -569,11 +723,12 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                             <div className="space-y-3">
                                 <label className="text-sm font-medium text-slate-700">Upload Cancelled Cheque or Passbook (For verification)</label>
                                 {isEditing ? (
-                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-teal-400 transition-colors cursor-pointer">
+                                    <label className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-teal-400 transition-colors cursor-pointer block">
+                                        <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleKycUpload(e, 'cancelled_cheque', 'bank')} />
                                         <Upload className="mx-auto text-slate-400 mb-3" size={32} />
                                         <p className="text-slate-600 font-medium">Drag & drop file here or click to browse</p>
                                         <p className="text-xs text-slate-400 mt-1">PDF, JPG, PNG up to 5MB</p>
-                                    </div>
+                                    </label>
                                 ) : documents.cancelled_cheque ? (
                                     <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
                                         <div className="flex items-center gap-3">
@@ -583,11 +738,16 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                                                 <p className="text-xs text-slate-500">{documents.cancelled_cheque.size}</p>
                                             </div>
                                         </div>
-                                        {documents.cancelled_cheque.verified && (
-                                            <span className="text-emerald-500 text-xs font-medium flex items-center gap-1">
-                                                <CheckCircle size={12} /> Verified
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-3">
+                                            <button type="button" onClick={() => documents.cancelled_cheque?.url && setPreviewUrl(documents.cancelled_cheque.url)} className="text-teal-600 hover:text-teal-700 bg-teal-50 p-1.5 rounded-md" title="Preview Document">
+                                                <Eye size={18} />
+                                            </button>
+                                            {documents.cancelled_cheque.verified && (
+                                                <span className="text-emerald-500 text-xs font-medium flex items-center gap-1">
+                                                    <CheckCircle size={12} /> Verified
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 ) : (
                                     <p className="text-sm text-slate-500 italic">No document uploaded</p>
@@ -628,27 +788,128 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Aadhaar Front */}
                                         <div className="p-4 bg-white rounded-lg border border-slate-200">
                                             <p className="text-xs text-slate-500 mb-2">📄 Front Side</p>
-                                            {documents.aadhaar_front ? (
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-sm text-slate-700">{documents.aadhaar_front.name} ({documents.aadhaar_front.size})</p>
-                                                    <CheckCircle className="text-emerald-500" size={16} />
-                                                </div>
-                                            ) : (
-                                                <button className="text-sm text-teal-600 hover:underline">Upload</button>
-                                            )}
+                                            {(() => {
+                                                const freshPreview = kycPreviews['aadhaar_front'];
+                                                const savedDoc = documents.aadhaar_front;
+                                                if (freshPreview) {
+                                                    return (
+                                                        <div className="space-y-2">
+                                                            <div className="relative w-full h-28 bg-slate-100 rounded-lg overflow-hidden border border-emerald-200">
+                                                                {freshPreview.isPdf ? (
+                                                                    <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                                                                        <FileText size={28} className="text-red-500" />
+                                                                        <span className="text-xs text-slate-500">PDF Document</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <img src={freshPreview.url} alt="Aadhaar Front" className="w-full h-full object-cover" />
+                                                                )}
+                                                                <div className="absolute top-1.5 right-1.5 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">✓ Uploaded</div>
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <div>
+                                                                    <p className="text-xs font-medium text-slate-700 truncate max-w-[120px]">{freshPreview.name}</p>
+                                                                    <p className="text-[10px] text-slate-400">{freshPreview.size}</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <button type="button" onClick={() => setPreviewUrl(freshPreview.url)} className="text-teal-600 hover:text-teal-700 p-1 bg-teal-50 rounded" title="Preview">
+                                                                        <Eye size={14} />
+                                                                    </button>
+                                                                    {isEditing && (
+                                                                        <label className="text-slate-500 hover:text-slate-700 p-1 bg-slate-50 rounded cursor-pointer" title="Re-upload">
+                                                                            <Upload size={14} />
+                                                                            <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleKycUpload(e, 'aadhaar_front', 'aadhaar')} />
+                                                                        </label>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                } else if (savedDoc) {
+                                                    return (
+                                                        <div className="flex items-center justify-between">
+                                                            <p className="text-sm text-slate-700">{savedDoc.name} ({savedDoc.size})</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <button type="button" onClick={() => savedDoc.url && setPreviewUrl(savedDoc.url)} className="text-teal-600 hover:text-teal-700 p-1" title="Preview Document">
+                                                                    <Eye size={16} />
+                                                                </button>
+                                                                <CheckCircle className="text-emerald-500" size={16} />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <label className="text-sm text-teal-600 hover:underline cursor-pointer block">
+                                                            <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleKycUpload(e, 'aadhaar_front', 'aadhaar')} />
+                                                            Upload
+                                                        </label>
+                                                    );
+                                                }
+                                            })()}
                                         </div>
+
+                                        {/* Aadhaar Back */}
                                         <div className="p-4 bg-white rounded-lg border border-slate-200">
                                             <p className="text-xs text-slate-500 mb-2">📄 Back Side</p>
-                                            {documents.aadhaar_back ? (
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-sm text-slate-700">{documents.aadhaar_back.name} ({documents.aadhaar_back.size})</p>
-                                                    <CheckCircle className="text-emerald-500" size={16} />
-                                                </div>
-                                            ) : (
-                                                <button className="text-sm text-teal-600 hover:underline">Upload</button>
-                                            )}
+                                            {(() => {
+                                                const freshPreview = kycPreviews['aadhaar_back'];
+                                                const savedDoc = documents.aadhaar_back;
+                                                if (freshPreview) {
+                                                    return (
+                                                        <div className="space-y-2">
+                                                            <div className="relative w-full h-28 bg-slate-100 rounded-lg overflow-hidden border border-emerald-200">
+                                                                {freshPreview.isPdf ? (
+                                                                    <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                                                                        <FileText size={28} className="text-red-500" />
+                                                                        <span className="text-xs text-slate-500">PDF Document</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <img src={freshPreview.url} alt="Aadhaar Back" className="w-full h-full object-cover" />
+                                                                )}
+                                                                <div className="absolute top-1.5 right-1.5 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">✓ Uploaded</div>
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <div>
+                                                                    <p className="text-xs font-medium text-slate-700 truncate max-w-[120px]">{freshPreview.name}</p>
+                                                                    <p className="text-[10px] text-slate-400">{freshPreview.size}</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <button type="button" onClick={() => setPreviewUrl(freshPreview.url)} className="text-teal-600 hover:text-teal-700 p-1 bg-teal-50 rounded" title="Preview">
+                                                                        <Eye size={14} />
+                                                                    </button>
+                                                                    {isEditing && (
+                                                                        <label className="text-slate-500 hover:text-slate-700 p-1 bg-slate-50 rounded cursor-pointer" title="Re-upload">
+                                                                            <Upload size={14} />
+                                                                            <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleKycUpload(e, 'aadhaar_back', 'aadhaar')} />
+                                                                        </label>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                } else if (savedDoc) {
+                                                    return (
+                                                        <div className="flex items-center justify-between">
+                                                            <p className="text-sm text-slate-700">{savedDoc.name} ({savedDoc.size})</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <button type="button" onClick={() => savedDoc.url && setPreviewUrl(savedDoc.url)} className="text-teal-600 hover:text-teal-700 p-1" title="Preview Document">
+                                                                    <Eye size={16} />
+                                                                </button>
+                                                                <CheckCircle className="text-emerald-500" size={16} />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <label className="text-sm text-teal-600 hover:underline cursor-pointer block">
+                                                            <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleKycUpload(e, 'aadhaar_back', 'aadhaar')} />
+                                                            Upload
+                                                        </label>
+                                                    );
+                                                }
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
@@ -684,14 +945,63 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
 
                                     <div className="p-4 bg-white rounded-lg border border-slate-200">
                                         <p className="text-xs text-slate-500 mb-2">📄 PAN Card</p>
-                                        {documents.pan_card ? (
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-sm text-slate-700">{documents.pan_card.name} ({documents.pan_card.size})</p>
-                                                <CheckCircle className="text-emerald-500" size={16} />
-                                            </div>
-                                        ) : (
-                                            <button className="text-sm text-teal-600 hover:underline">Upload</button>
-                                        )}
+                                        {(() => {
+                                            const freshPreview = kycPreviews['pan_card'];
+                                            const savedDoc = documents.pan_card;
+                                            if (freshPreview) {
+                                                return (
+                                                    <div className="space-y-2">
+                                                        <div className="relative w-full h-28 bg-slate-100 rounded-lg overflow-hidden border border-emerald-200">
+                                                            {freshPreview.isPdf ? (
+                                                                <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                                                                    <FileText size={28} className="text-red-500" />
+                                                                    <span className="text-xs text-slate-500">PDF Document</span>
+                                                                </div>
+                                                            ) : (
+                                                                <img src={freshPreview.url} alt="PAN Card" className="w-full h-full object-cover" />
+                                                            )}
+                                                            <div className="absolute top-1.5 right-1.5 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">✓ Uploaded</div>
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className="text-xs font-medium text-slate-700 truncate max-w-[200px]">{freshPreview.name}</p>
+                                                                <p className="text-[10px] text-slate-400">{freshPreview.size}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button type="button" onClick={() => setPreviewUrl(freshPreview.url)} className="text-teal-600 hover:text-teal-700 p-1 bg-teal-50 rounded" title="Preview">
+                                                                    <Eye size={14} />
+                                                                </button>
+                                                                {isEditing && (
+                                                                    <label className="text-slate-500 hover:text-slate-700 p-1 bg-slate-50 rounded cursor-pointer" title="Re-upload">
+                                                                        <Upload size={14} />
+                                                                        <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleKycUpload(e, 'pan_card', 'pan')} />
+                                                                    </label>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            } else if (savedDoc) {
+                                                return (
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-sm text-slate-700">{savedDoc.name} ({savedDoc.size})</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <button type="button" onClick={() => savedDoc.url && setPreviewUrl(savedDoc.url)} className="text-teal-600 hover:text-teal-700 p-1" title="Preview Document">
+                                                                <Eye size={16} />
+                                                            </button>
+                                                            <CheckCircle className="text-emerald-500" size={16} />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            } else {
+                                                return (
+                                                    <label className="text-sm text-teal-600 hover:underline cursor-pointer block">
+                                                        <input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleKycUpload(e, 'pan_card', 'pan')} />
+                                                        Upload
+                                                    </label>
+                                                );
+                                            }
+                                        })()}
                                     </div>
                                 </div>
                             </div>
@@ -748,7 +1058,7 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                                 </div>
                             </div>
 
-                            {/* 2FA Settings */}
+                            {/* 2FA Settings 
                             <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
                                 <div className="flex items-center justify-between mb-4">
                                     <h4 className="font-semibold text-slate-800 flex items-center gap-2">
@@ -774,8 +1084,9 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                                     </button>
                                 </div>
                             </div>
+                            */}
 
-                            {/* Login History */}
+                            {/* Login History 
                             <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
                                 <h4 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
                                     <Globe size={18} className="text-blue-600" /> Login History
@@ -800,13 +1111,14 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                                     Logout All Devices
                                 </button>
                             </div>
+                            */}
                         </div>
                     )}
 
-                    {/* TAB 6: Preferences */}
+                    {/* TAB 6: Preferences 
                     {activeTab === 'preferences' && (
                         <div className="space-y-6">
-                            {/* Email Notifications */}
+                            {/* Email Notifications *\/}
                             <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
                                 <h4 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
                                     <Mail size={18} className="text-blue-600" /> Email Notifications
@@ -834,7 +1146,7 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                                 </div>
                             </div>
 
-                            {/* SMS Notifications */}
+                            {/* SMS Notifications *\/}
                             <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
                                 <h4 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
                                     <Phone size={18} className="text-green-600" /> SMS Notifications
@@ -863,7 +1175,7 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                                 </div>
                             </div>
 
-                            {/* Language & Theme */}
+                            {/* Language & Theme *\/}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
                                     <h4 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
@@ -923,8 +1235,34 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
                             </button>
                         </div>
                     )}
+                    */}
                 </div>
             </div>
+            {/* Document Preview Modal */}
+            {previewUrl && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreviewUrl(null)}>
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+                            <h3 className="font-semibold text-slate-800">Document Preview</h3>
+                            <button onClick={() => setPreviewUrl(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-50">
+                            {previewUrl.toLowerCase().endsWith('.pdf') ? (
+                                <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg border border-slate-200" title="PDF Preview" />
+                            ) : (
+                                <img src={previewUrl} alt="Document Preview" className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-sm" />
+                            )}
+                        </div>
+                        <div className="p-4 border-t border-slate-200 flex justify-end">
+                            <a href={previewUrl} target="_blank" rel="noreferrer" className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium text-sm">
+                                Open in New Tab
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

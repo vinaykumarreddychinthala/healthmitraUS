@@ -85,7 +85,7 @@ export function MedicalConsultationForm({ onSuccess }: MedicalConsultationFormPr
                                 required
                                 type="tel"
                                 value={formData.phone}
-                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, "") })}
                                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
                                 placeholder="Mobile Number"
                             />

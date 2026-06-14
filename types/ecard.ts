@@ -16,6 +16,7 @@ export interface ECardMember {
     validFrom: string;
     validTill: string;
     policyNo: string;
+    policyId?: string;
     issuedDate: string;
     emergencyContact: string;
     coverageAmount?: number;

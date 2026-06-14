@@ -56,15 +56,9 @@ export default async function ClientTemplate({
         const headersList = await headers();
         const pathname = headersList.get('x-pathname') || '';
 
-        // If any member has pending KYC, only /e-cards is accessible
-        if (pendingKycCount > 0 && !pathname.startsWith('/e-cards') && !pathname.startsWith('/api/')) {
-            redirect('/e-cards');
-        }
-
-        // If trying to access reimbursements but no cards are verified
-        if (pathname.startsWith('/reimbursements') && verifiedCount === 0) {
-            redirect('/e-cards?error=verification_required');
-        }
+        // Note: Global KYC redirects have been removed. 
+        // Users can navigate the dashboard, but specific actions (like Wallet Withdrawal) 
+        // are blocked locally in their respective components if KYC is pending.
     }
 
     return (

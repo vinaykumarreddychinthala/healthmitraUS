@@ -1,2 +1,0 @@
-﻿app/(client)/my-purchases/page.tsx(31,23): error TS2322: Type 'import("C:/Users/pushp/Downloads/client7/types/dashboard").PurchasedPlan[]' is not assignable to type 'import("C:/Users/pushp/Downloads/client7/types/purchase").PurchasedPlan[]'.
-  Type 'PurchasedPlan' is missing the following properties from type 'PurchasedPlan': planId, membersCount, transactionId, amountPaid, and 4 more.

@@ -111,11 +111,11 @@ export default function CheckoutAuthPage({ params }: { params: Promise<{ planId:
                             )}
                         </div>
                         <CardTitle className="text-2xl font-bold text-slate-800">
-                            {step === 1 ? 'Almost There!' : 'Verify Your Email'}
+                            {step === 1 ? "You're Almost There!" : 'Verify Your Email'}
                         </CardTitle>
                         <CardDescription className="text-slate-500 mt-2">
                             {step === 1
-                                ? 'We need a few details before you proceed to payment.'
+                                ? 'Please verify yourself to know more about the detailed benefits of your selected plan.'
                                 : `We sent a 6-digit code to ${formData.email}`}
                         </CardDescription>
                     </CardHeader>
@@ -147,14 +147,31 @@ export default function CheckoutAuthPage({ params }: { params: Promise<{ planId:
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-slate-700">Phone Number</label>
-                                    <Input
-                                        type="tel"
-                                        placeholder="+1 (555) 000-0000"
-                                        value={formData.phone}
-                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                        required
-                                        className="h-11"
-                                    />
+                                    <div className="flex gap-2">
+                                        <select
+                                            className="h-11 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring w-[130px] shrink-0"
+                                            onChange={(e) => {
+                                                const current = formData.phone.replace(/^(\+1|\+91)\s?/, '');
+                                                setFormData({ ...formData, phone: e.target.value + ' ' + current });
+                                            }}
+                                            defaultValue="+1"
+                                        >
+                                            <option value="+1">🇺🇸 +1 (US)</option>
+                                            <option value="+91">🇮🇳 +91 (IN)</option>
+                                        </select>
+                                        <Input
+                                            type="tel"
+                                            placeholder="Phone number"
+                                            value={formData.phone.replace(/^(\+1|\+91)\s?/, '')}
+                                            onChange={(e) => {
+                                                const prefix = formData.phone.match(/^(\+1|\+91)/)?.[0] || '+1';
+                                                setFormData({ ...formData, phone: prefix + ' ' + e.target.value });
+                                            }}
+                                            required
+                                            className="h-11 flex-1"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-slate-400">Select your country code and enter your phone number</p>
                                 </div>
 
                                 <Turnstile onVerify={(token) => setTurnstileToken(token)} />

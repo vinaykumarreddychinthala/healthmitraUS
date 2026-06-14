@@ -48,6 +48,11 @@ export async function fetchDashboardData(): Promise<
         .eq("recipient_id", user.id)
         .order("created_at", { ascending: false })
         .limit(10),
+      adminClient
+        .from("customers")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "active"),
     ]);
 
     // Extract data from settled promises
@@ -75,6 +80,10 @@ export async function fetchDashboardData(): Promise<
       results[5].status === "fulfilled"
         ? results[5].value
         : { data: null, error: results[5].reason };
+    const customersRes =
+      results[6].status === "fulfilled"
+        ? results[6].value
+        : { data: null, error: results[6].reason };
 
     // Helper to safely log errors ignoring PGRST116 (No rows returned)
     const logError = (name: string, err: any) => {
@@ -89,6 +98,7 @@ export async function fetchDashboardData(): Promise<
     if (requestsRes.error) logError("Requests", requestsRes.error);
     if (claimsRes.error) logError("Claims", claimsRes.error);
     if (notifsRes.error) logError("Notifications", notifsRes.error);
+    if (customersRes.error) logError("Customers", customersRes.error);
 
     const profile = profileRes.data || {
       full_name: user.email?.split("@")[0],
@@ -99,10 +109,15 @@ export async function fetchDashboardData(): Promise<
     const members = membersRes.data || [];
     const activeMembers = members.filter((m: any) => m.status === "active");
 
-    // Calculate Active Plans (Logic: Find all active members for Self with a plan)
-    const selfMembers = activeMembers.filter((m: any) => m.relation === "Self" && m.plans);
+    // Calculate Active Plans (Logic: Find all members for Self with a plan, including those pending KYC)
+    console.log("DASHBOARD MEMBERS:", JSON.stringify(members, null, 2));
+    const selfMembers = members.filter((m: any) => 
+      m.relation?.toLowerCase() === "self" && 
+      m.plans && 
+      (m.status === "active" || m.status === "pending")
+    );
     
-    const activePlans = selfMembers.map((member: any) => {
+    let activePlans = selfMembers.map((member: any) => {
       const planData = member.plans;
       let daysRemaining = 0;
       if (member.valid_till) {
@@ -128,6 +143,37 @@ export async function fetchDashboardData(): Promise<
           0,
       };
     });
+
+    // Include plans from customers table that aren't already captured in ecard_members
+    const customerData = customersRes.data || [];
+    if (customerData.length > 0) {
+      const activePlanIds = new Set(activePlans.map((p: any) => p.id));
+      
+      const extraPlans = customerData
+        .filter((c: any) => !activePlanIds.has(c.plan_id))
+        .map((c: any) => {
+          let daysRemaining = 0;
+          if (c.valid_till) {
+            const validTillDate = new Date(c.valid_till);
+            if (!isNaN(validTillDate.getTime())) {
+              daysRemaining = Math.max(
+                0,
+                Math.ceil((validTillDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+              );
+            }
+          }
+          return {
+            id: c.plan_id,
+            name: c.plan_name || "Active Plan",
+            status: c.status,
+            validUntil: c.valid_till,
+            daysRemaining,
+            coverageAmount: 0,
+          };
+        });
+        
+      activePlans = [...activePlans, ...extraPlans];
+    }
 
     // Recent Activity Merger with safe timestamp handling
     const recentActivity = [

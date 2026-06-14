@@ -25,8 +25,9 @@ export async function POST(request: Request) {
         const panFile           = formData.get('panFile') as File | null;
 
         // --- Validations ---
-        if (!memberId || !holderFullName || !relation || !dob || !gender || !bloodGroup) {
-            return NextResponse.json({ success: false, error: 'Full name, relation, dob, gender, blood group and member ID are required' }, { status: 400 });
+        // bloodGroup is optional; all other personal fields are required
+        if (!memberId || !holderFullName || !relation || !dob || !gender) {
+            return NextResponse.json({ success: false, error: 'Full name, relation, date of birth, and gender are required' }, { status: 400 });
         }
         if (!aadhaarDeclaration) {
             if (!aadhaarNumber || aadhaarNumber.replace(/\D/g, '').length !== 12) {

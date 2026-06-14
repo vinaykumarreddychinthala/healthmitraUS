@@ -263,11 +263,10 @@ function TermsModal({
           <button
             onClick={onAgree}
             disabled={!hasScrolledToBottom}
-            className={`w-full py-3 rounded-lg font-medium transition-colors ${
-              hasScrolledToBottom
-                ? "bg-teal-600 hover:bg-teal-700 text-white cursor-pointer"
-                : "bg-slate-200 text-slate-400 cursor-not-allowed"
-            }`}
+            className={`w-full py-3 rounded-lg font-medium transition-colors ${hasScrolledToBottom
+              ? "bg-teal-600 hover:bg-teal-700 text-white cursor-pointer"
+              : "bg-slate-200 text-slate-400 cursor-not-allowed"
+              }`}
           >
             {hasScrolledToBottom
               ? "I Understand & Agree"
@@ -296,7 +295,7 @@ const formSchema = z.object({
   ambulanceType: z.string().optional(),
   patientName: z.string().optional(),
   patientAge: z.string().optional(),
-  patientPhone: z.string().optional(),
+  patientPhone: z.string().regex(/^\d*$/, "Only numbers are allowed").optional(),
   pickupAddressLine1: z.string().optional(),
   pickupAddressLine2: z.string().optional(),
   pickupCity: z.string().optional(),
@@ -318,7 +317,7 @@ const formSchema = z.object({
   currentMedications: z.string().optional(),
   preferredDate: z.string().optional(),
   preferredTimeSlot: z.string().optional(),
-  patientPhoneNumber: z.string().optional(),
+  patientPhoneNumber: z.string().regex(/^\d*$/, "Only numbers are allowed").optional(),
 
   // Diagnostic fields
   testNames: z.array(z.string()).optional(),
@@ -333,6 +332,7 @@ const formSchema = z.object({
   duration: z.string().optional(),
   startDate: z.string().optional(),
   requirements: z.string().optional(),
+  caretakerGender: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -396,18 +396,33 @@ export function ServiceRequestForm({
   const [manualDestination, setManualDestination] = useState(false);
 
   const typeFromUrl = searchParams.get("type");
-  
+
   // Determine if the user has access to any services
   const hasAccess = allowedServices.length > 0;
-  
+
   const requestedType = initialType || typeFromUrl;
-  const isRequestedTypeAllowed = requestedType && allowedServices.includes(requestedType);
+  const universallyAllowed = ["companion", "bill_reimbursement", "general", "emergency"];
+  const isRequestedTypeAllowed = requestedType && (allowedServices.includes(requestedType) || universallyAllowed.includes(requestedType));
   const isExplicitlyBlocked = requestedType && !isRequestedTypeAllowed && hasAccess;
-  const fallbackType = hasAccess ? allowedServices[0] : "medical_consultation";
-  const defaultType = isRequestedTypeAllowed ? requestedType : fallbackType;
+  // Only use a default type if one is explicitly passed via URL/props; do NOT auto-select
+  const defaultType = isRequestedTypeAllowed ? requestedType : '';
 
   // Pre-fill patient name from policy holder
   const policyHolderName = serviceContext?.policyHolder?.holderFullName || '';
+
+  // Pre-fill patient phone from policy holder
+  const policyHolderPhone = serviceContext?.policyHolder?.contactNumber || '';
+
+  // Calculate age from dob
+  const getAge = (dobString?: string | null) => {
+    if (!dobString) return '';
+    const dob = new Date(dobString);
+    if (isNaN(dob.getTime())) return '';
+    const diff_ms = Date.now() - dob.getTime();
+    const age_dt = new Date(diff_ms);
+    return Math.abs(age_dt.getUTCFullYear() - 1970).toString();
+  };
+  const policyHolderAge = getAge(serviceContext?.policyHolder?.dob);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -420,17 +435,19 @@ export function ServiceRequestForm({
       urgency: "scheduled",
       consultationType: "video",
       isFasting: "no",
-      // Pre-fill patient name from policy holder
+      // Pre-fill patient info from policy holder
       patientName: policyHolderName,
+      patientPhone: policyHolderPhone,
+      patientPhoneNumber: policyHolderPhone,
+      patientAge: policyHolderAge,
     },
   });
 
   const watchType = form.watch("type");
-  const watchAmbulanceType = form.watch("ambulanceType");
   const watchUrgency = form.watch("urgency");
 
   useEffect(() => {
-    if (userProfile?.phone) {
+    if (!policyHolderPhone && userProfile?.phone) {
       form.setValue("patientPhone", userProfile.phone);
       form.setValue("patientPhoneNumber", userProfile.phone);
     }
@@ -439,28 +456,44 @@ export function ServiceRequestForm({
     if (userProfile?.city) form.setValue("pickupCity", userProfile.city);
     if (userProfile?.pincode)
       form.setValue("pickupPincode", userProfile.pincode);
-  }, [userProfile, form]);
+  }, [userProfile, form, policyHolderPhone]);
 
   const getCurrentLocation = () => {
     setLocationLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
+          // Using Nominatim (OpenStreetMap) which is 100% FREE.
+          // Adding an email parameter complies with their usage policy to prevent being blocked.
           const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}&addressdetails=1`,
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}&addressdetails=1&email=contact@healthmitra.com`,
           );
           const data = await response.json();
           if (data.address) {
+            const area = data.address.neighbourhood || data.address.residential || data.address.suburb || data.address.city_district || "";
+            const road = data.address.road || "";
+            
             form.setValue(
               "pickupAddressLine1",
-              data.address.road || data.address.suburb || "",
+              road || area || "",
+              { shouldDirty: true, shouldValidate: true, shouldTouch: true }
             );
+            
+            if (road && area) {
+              form.setValue(
+                "pickupAddressLine2",
+                area,
+                { shouldDirty: true, shouldValidate: true, shouldTouch: true }
+              );
+            }
+            
             form.setValue(
               "pickupCity",
-              data.address.city || data.address.town || "",
+              data.address.city || data.address.town || data.address.county || data.address.state_district || "",
+              { shouldDirty: true, shouldValidate: true, shouldTouch: true }
             );
-            form.setValue("pickupState", data.address.state || "");
-            form.setValue("pickupPincode", data.address.postcode || "");
+            form.setValue("pickupState", data.address.state || "", { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+            form.setValue("pickupPincode", data.address.postcode || "", { shouldDirty: true, shouldValidate: true, shouldTouch: true });
             toast.success("Location detected successfully");
           }
         } catch {
@@ -531,10 +564,15 @@ export function ServiceRequestForm({
   const getTitle = () => {
     const titles: Record<string, string> = {
       ambulance: "Book Ambulance Service",
-      medical_consultation: "Doctor Appointment",
+      medical_consultation: "Home Doctor Appointment",
       diagnostic: "Book Diagnostic Test",
       caretaker: "Caretaker Services",
       nursing: "Nursing Procedures",
+      companion: "Companion Services",
+      bill_reimbursement: "Bill Reimbursement",
+      voucher: "Redeem Voucher",
+      general: "General Request",
+      emergency: "Emergency Request",
     };
     return titles[watchType] || "Service Request";
   };
@@ -552,7 +590,7 @@ export function ServiceRequestForm({
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <h1 className="text-xl font-bold mb-6">{getTitle()}</h1>
 
-        {!hasAccess ? (
+        {!hasAccess && requestedType && !universallyAllowed.includes(requestedType) ? (
           <div className="text-center py-8">
             <AlertCircle className="mx-auto h-12 w-12 text-slate-400 mb-4" />
             <h3 className="text-lg font-medium text-slate-900 mb-2">No Active Subscriptions</h3>
@@ -589,14 +627,17 @@ export function ServiceRequestForm({
                 defaultValue={defaultType}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select Service" />
+                  <SelectValue placeholder="Please select a service" />
                 </SelectTrigger>
                 <SelectContent>
                   {allowedServices.includes("ambulance") && <SelectItem value="ambulance">Ambulance Service</SelectItem>}
-                  {allowedServices.includes("medical_consultation") && <SelectItem value="medical_consultation">Doctor Appointment</SelectItem>}
+                  {allowedServices.includes("medical_consultation") && <SelectItem value="medical_consultation">Home Doctor Service Appointment</SelectItem>}
                   {allowedServices.includes("diagnostic") && <SelectItem value="diagnostic">Diagnostic Test</SelectItem>}
                   {allowedServices.includes("caretaker") && <SelectItem value="caretaker">Caretaker Services</SelectItem>}
                   {allowedServices.includes("nursing") && <SelectItem value="nursing">Nursing Procedures</SelectItem>}
+                  <SelectItem value="companion">Companion Service</SelectItem>
+                  <SelectItem value="bill_reimbursement">Bill Reimbursement</SelectItem>
+                  <SelectItem value="general">General Request</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -615,564 +656,554 @@ export function ServiceRequestForm({
               </div>
             )}
 
-          {/* ===== AMBULANCE SERVICE ===== */}
-          {watchType === "ambulance" && (
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">Urgency Level</Label>
-                <RadioGroup
-                  onValueChange={(val) => form.setValue("urgency", val)}
-                  defaultValue="scheduled"
-                >
-                  <div className="flex items-center space-x-3 p-3 rounded-lg border border-red-200 bg-red-50">
-                    <RadioGroupItem value="immediate" id="urgent" />
-                    <Label
-                      htmlFor="urgent"
-                      className="text-red-700 font-semibold cursor-pointer"
-                    >
-                      Immediate (Emergency) - Dispatch within 2 minutes
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-3 p-3 rounded-lg border border-slate-200">
-                    <RadioGroupItem value="scheduled" id="scheduled" />
-                    <Label htmlFor="scheduled" className="cursor-pointer">
-                      Scheduled Transfer - For planned hospital visits
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">
-                  Ambulance Type
-                </Label>
-                <RadioGroup
-                  onValueChange={(val) => form.setValue("ambulanceType", val)}
-                  defaultValue="bls"
-                  className="grid grid-cols-3 gap-3"
-                >
-                  {[
-                    { value: "bls", label: "BLS", desc: "Basic Life Support" },
-                    {
-                      value: "als",
-                      label: "ALS",
-                      desc: "Advanced Life Support",
-                    },
-                    { value: "icu", label: "ICU", desc: "ICU Equipped" },
-                  ].map((type) => (
-                    <div
-                      key={type.value}
-                      className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer ${watchAmbulanceType === type.value ? "border-teal-500 bg-teal-50" : "border-slate-200"}`}
-                    >
-                      <RadioGroupItem value={type.value} id={type.value} />
-                      <Label htmlFor={type.value} className="cursor-pointer">
-                        <span className="font-medium">{type.label}</span>
-                        <p className="text-xs text-slate-500">{type.desc}</p>
+            {/* ===== AMBULANCE SERVICE ===== */}
+            {watchType === "ambulance" && (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold">Urgency Level</Label>
+                  <RadioGroup
+                    onValueChange={(val) => form.setValue("urgency", val)}
+                    defaultValue="scheduled"
+                  >
+                    <div className="flex items-center space-x-3 p-3 rounded-lg border border-red-200 bg-red-50">
+                      <RadioGroupItem value="immediate" id="urgent" />
+                      <Label
+                        htmlFor="urgent"
+                        className="text-red-700 font-semibold cursor-pointer"
+                      >
+                        Immediate (Emergency) - Dispatch within 15 minutes
                       </Label>
                     </div>
-                  ))}
-                </RadioGroup>
-              </div>
+                    <div className="flex items-center space-x-3 p-3 rounded-lg border border-slate-200">
+                      <RadioGroupItem value="scheduled" id="scheduled" />
+                      <Label htmlFor="scheduled" className="cursor-pointer">
+                        Scheduled Transfer - For planned hospital visits
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
 
-              <div className="space-y-3 border-t pt-4">
-                <Label className="text-base font-semibold">
-                  Patient Information
-                </Label>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3 border-t pt-4">
+                  <Label className="text-base font-semibold">
+                    Patient Information
+                  </Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      {...form.register("patientName")}
+                      placeholder="Patient Full Name *"
+                    />
+                    <Input
+                      {...form.register("patientAge")}
+                      type="number"
+                      placeholder="Age *"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      {...form.register("patientPhone", {
+                        onChange: (e) => {
+                          e.target.value = e.target.value.replace(/\D/g, "");
+                        }
+                      })}
+                      placeholder="Contact Number *"
+                      className="pl-10"
+                      maxLength={10}
+                      type="tel"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t pt-4">
+                  <div className="flex justify-between">
+                    <Label className="text-base font-semibold">
+                      Pickup Location
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={getCurrentLocation}
+                      disabled={locationLoading}
+                    >
+                      <Navigation
+                        className={`h-4 w-4 mr-1 ${locationLoading ? "animate-spin" : ""}`}
+                      />
+                      {locationLoading ? "Detecting..." : "Use My Location"}
+                    </Button>
+                  </div>
                   <Input
-                    {...form.register("patientName")}
-                    placeholder="Patient Full Name *"
+                    {...form.register("pickupAddressLine1")}
+                    placeholder="Address Line 1 *"
                   />
                   <Input
-                    {...form.register("patientAge")}
-                    type="number"
-                    placeholder="Age *"
+                    {...form.register("pickupAddressLine2")}
+                    placeholder="Address Line 2 (Optional)"
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      {...form.register("pickupLandmark")}
+                      placeholder="Landmark"
+                    />
+                    <Input
+                      {...form.register("pickupCity")}
+                      placeholder="City *"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      {...form.register("pickupState")}
+                      placeholder="State *"
+                    />
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        {...form.register("pickupPincode")}
+                        placeholder="Pincode *"
+                        className="pl-10"
+                        maxLength={6}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t pt-4">
+                  <Label className="text-base font-semibold flex items-center gap-2">
+                    <Building className="h-4 w-4" /> Destination Hospital
+                  </Label>
+                  <Select onValueChange={handleHospitalSelect}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select hospital" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {NEARBY_HOSPITALS.map((h) => (
+                        <SelectItem key={h.id} value={h.id}>
+                          <div>
+                            <p className="font-medium">{h.name}</p>
+                            <p className="text-xs text-slate-500">
+                              {h.address}, {h.city}
+                            </p>
+                          </div>
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="other">
+                        Other Hospital (Enter manually)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {manualDestination && (
+                    <div className="space-y-3">
+                      <Input
+                        {...form.register("destinationHospitalName")}
+                        placeholder="Hospital Name *"
+                      />
+                      <Textarea
+                        {...form.register("destinationAddress")}
+                        placeholder="Complete Address"
+                        rows={2}
+                      />
+                    </div>
+                  )}
+
+                  <Textarea
+                    {...form.register("notesForCrew")}
+                    placeholder="Special instructions for ambulance crew (e.g., patient on oxygen, need stretcher)"
+                    rows={2}
                   />
                 </div>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+
+                {watchUrgency === "scheduled" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input type="date" {...form.register("preferredDate")} />
+                    <Select
+                      onValueChange={(val) =>
+                        form.setValue("preferredTimeSlot", val)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select time slot" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {Array.from({ length: 48 }).map((_, i) => {
+                          const startHour = Math.floor(i / 2);
+                          const startMin = i % 2 === 0 ? "00" : "30";
+                          const endHour = Math.floor((i + 1) / 2) % 24;
+                          const endMin = (i + 1) % 2 === 0 ? "00" : "30";
+                          
+                          const formatTime = (h: number, m: string) => {
+                            const ampm = h >= 12 ? 'PM' : 'AM';
+                            const hour12 = h % 12 || 12;
+                            return `${hour12}:${m} ${ampm}`;
+                          };
+                          
+                          const label = `${formatTime(startHour, startMin)} - ${formatTime(endHour, endMin)}`;
+                          return <SelectItem key={label} value={label}>{label}</SelectItem>;
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ===== DOCTOR CONSULTATION ===== */}
+            {watchType === "medical_consultation" && (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Patient Details</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input
+                      {...form.register("patientName")}
+                      placeholder="Patient Full Name"
+                    />
+                    <Input
+                      type="number"
+                      {...form.register("patientAge")}
+                      placeholder="Age"
+                    />
+                  </div>
                   <Input
-                    {...form.register("patientPhone")}
-                    placeholder="Contact Number *"
-                    className="pl-10"
+                    {...form.register("patientPhoneNumber", {
+                      onChange: (e) => {
+                        e.target.value = e.target.value.replace(/\D/g, "");
+                      }
+                    })}
+                    placeholder="Contact Number (Only Numbers)"
+                    type="tel"
                     maxLength={10}
                   />
                 </div>
-              </div>
 
-              <div className="space-y-3 border-t pt-4">
-                <div className="flex justify-between">
-                  <Label className="text-base font-semibold">
-                    Pickup Location
-                  </Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={getCurrentLocation}
-                    disabled={locationLoading}
-                  >
-                    <Navigation
-                      className={`h-4 w-4 mr-1 ${locationLoading ? "animate-spin" : ""}`}
-                    />
-                    {locationLoading ? "Detecting..." : "Use My Location"}
-                  </Button>
-                </div>
-                <Input
-                  {...form.register("pickupAddressLine1")}
-                  placeholder="Address Line 1 *"
-                />
-                <Input
-                  {...form.register("pickupAddressLine2")}
-                  placeholder="Address Line 2 (Optional)"
-                />
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    {...form.register("pickupLandmark")}
-                    placeholder="Landmark"
-                  />
-                  <Input
-                    {...form.register("pickupCity")}
-                    placeholder="City *"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <Label>Choose Specialty</Label>
                   <Select
-                    onValueChange={(val) => form.setValue("pickupState", val)}
+                    onValueChange={(val) => form.setValue("specialization", val)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="State" />
+                      <SelectValue placeholder="Select Doctor Specialty" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Tamil Nadu">Tamil Nadu</SelectItem>
-                      <SelectItem value="Maharashtra">Maharashtra</SelectItem>
-                      <SelectItem value="Delhi">Delhi</SelectItem>
-                      <SelectItem value="Karnataka">Karnataka</SelectItem>
+                      <SelectItem value="general">General Physician</SelectItem>
+                      <SelectItem value="cardio">Cardiologist</SelectItem>
+                      <SelectItem value="derma">Dermatologist</SelectItem>
+                      <SelectItem value="pediatric">Pediatrician</SelectItem>
+                      <SelectItem value="neuro">Neurologist</SelectItem>
+                      <SelectItem value="ortho">Orthopedic</SelectItem>
+                      <SelectItem value="gyne">Gynecologist</SelectItem>
+                      <SelectItem value="ent">ENT Specialist</SelectItem>
+                      <SelectItem value="psych">Psychiatrist</SelectItem>
+                      <SelectItem value="dentist">Dentist</SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input type="date" {...form.register("preferredDate")} />
+                    <Select
+                      onValueChange={(val) =>
+                        form.setValue("preferredTimeSlot", val)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="8am-10am">8:00 AM - 10:00 AM</SelectItem>
+                        <SelectItem value="10am-12pm">10:00 AM - 12:00 PM</SelectItem>
+                        <SelectItem value="12pm-2pm">12:00 PM - 2:00 PM</SelectItem>
+                        <SelectItem value="2pm-4pm">2:00 PM - 4:00 PM</SelectItem>
+                        <SelectItem value="4pm-6pm">4:00 PM - 6:00 PM</SelectItem>
+                        <SelectItem value="6pm-8pm">6:00 PM - 8:00 PM</SelectItem>
+                        <SelectItem value="8pm-10pm">8:00 PM - 10:00 PM</SelectItem>
+                        <SelectItem value="10pm-12am">10:00 PM - 12:00 AM</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label>Medical History & Prescription</Label>
+                  <Textarea
+                    {...form.register("symptoms")}
+                    placeholder="Describe your symptoms, when they started, severity (Optional)"
+                    rows={3}
+                  />
+                  <Textarea
+                    {...form.register("existingConditions")}
+                    placeholder="Existing medical conditions (diabetes, hypertension, etc.) (Optional)"
+                    rows={2}
+                  />
+                  <Input
+                    {...form.register("currentMedications")}
+                    placeholder="Current medications (Optional)"
+                  />
+                  <div>
+                    <Label className="text-sm font-medium mb-1 block">Upload Prescription / Report (Optional)</Label>
                     <Input
-                      {...form.register("pickupPincode")}
-                      placeholder="Pincode *"
-                      className="pl-10"
-                      maxLength={6}
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => {
+                        // Handled by generic file upload or skipped since it's just visual for now
+                        // If needed, this requires a state and upload logic similar to others
+                      }}
+                      className="cursor-pointer"
                     />
+                    <p className="text-xs text-slate-500 mt-1">Upload relevant documents to help the doctor understand your condition.</p>
                   </div>
                 </div>
               </div>
+            )}
 
-              <div className="space-y-3 border-t pt-4">
-                <Label className="text-base font-semibold flex items-center gap-2">
-                  <Building className="h-4 w-4" /> Destination Hospital
-                </Label>
-                <Select onValueChange={handleHospitalSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select hospital" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {NEARBY_HOSPITALS.map((h) => (
-                      <SelectItem key={h.id} value={h.id}>
-                        <div>
-                          <p className="font-medium">{h.name}</p>
-                          <p className="text-xs text-slate-500">
-                            {h.address}, {h.city}
-                          </p>
-                        </div>
+            {/* ===== DIAGNOSTIC TESTS ===== */}
+            {watchType === "diagnostic" && (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Select Test Package</Label>
+                  <Select
+                    onValueChange={(val) => form.setValue("testNames", [val])}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose test" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full-body">
+                        Full Body Checkup - $999 (70+ tests)
                       </SelectItem>
-                    ))}
-                    <SelectItem value="other">
-                      Other Hospital (Enter manually)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                      <SelectItem value="diabetes">
+                        Diabetes Care - $599 (12 tests)
+                      </SelectItem>
+                      <SelectItem value="cardiac">
+                        Cardiac Profile - $1299 (25 tests)
+                      </SelectItem>
+                      <SelectItem value="thyroid">
+                        Thyroid Profile - $399 (3 tests)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                {manualDestination && (
-                  <div className="space-y-3">
+                <div className="space-y-3">
+                  <Label>Patient Details</Label>
+                  <div className="grid grid-cols-2 gap-4">
                     <Input
-                      {...form.register("destinationHospitalName")}
-                      placeholder="Hospital Name *"
+                      {...form.register("patientName")}
+                      placeholder="Patient Name"
                     />
-                    <Textarea
-                      {...form.register("destinationAddress")}
-                      placeholder="Complete Address"
-                      rows={2}
+                    <Input
+                      type="number"
+                      {...form.register("patientAge")}
+                      placeholder="Age"
                     />
                   </div>
-                )}
+                </div>
 
-                <Textarea
-                  {...form.register("notesForCrew")}
-                  placeholder="Special instructions for ambulance crew (e.g., patient on oxygen, need stretcher)"
-                  rows={2}
-                />
-              </div>
-
-              {watchUrgency === "scheduled" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <Input type="date" {...form.register("preferredDate")} />
+                <div className="space-y-3">
+                  <Label>Test Preparation</Label>
                   <Select
-                    onValueChange={(val) =>
-                      form.setValue("preferredTimeSlot", val)
-                    }
+                    onValueChange={(val) => form.setValue("isFasting", val)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select time slot" />
+                      <SelectValue placeholder="Is fasting required?" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="morning">
-                        Morning (8 AM - 12 PM)
+                      <SelectItem value="yes">
+                        Yes - 8-10 hours fasting
                       </SelectItem>
-                      <SelectItem value="afternoon">
-                        Afternoon (12 PM - 4 PM)
-                      </SelectItem>
-                      <SelectItem value="evening">
-                        Evening (4 PM - 8 PM)
-                      </SelectItem>
+                      <SelectItem value="no">No - No fasting needed</SelectItem>
                     </SelectContent>
                   </Select>
+                  {form.watch("isFasting") === "yes" && (
+                    <Input
+                      type="time"
+                      {...form.register("lastMealTime")}
+                      placeholder="Last meal time"
+                    />
+                  )}
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* ===== DOCTOR CONSULTATION ===== */}
-          {watchType === "medical_consultation" && (
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Label>Consultation Type</Label>
-                <RadioGroup
-                  onValueChange={(val) =>
-                    form.setValue("consultationType", val)
-                  }
-                  defaultValue="video"
-                  className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="video" id="video" />
-                    <Label htmlFor="video">Video Call</Label>
+                <div className="space-y-3">
+                  <Label>Collection Address</Label>
+                  <Textarea
+                    {...form.register("collectionAddress")}
+                    placeholder="Full address for home sample collection"
+                    rows={2}
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input type="date" {...form.register("preferredDate")} />
+                    <Select
+                      onValueChange={(val) =>
+                        form.setValue("preferredTimeSlot", val)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Time slot" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="6-9">6 AM - 9 AM</SelectItem>
+                        <SelectItem value="9-12">9 AM - 12 PM</SelectItem>
+                        <SelectItem value="12-15">12 PM - 3 PM</SelectItem>
+                        <SelectItem value="15-18">3 PM - 6 PM</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="inperson" id="inperson" />
-                    <Label htmlFor="inperson">In-Person</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Patient Details</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    {...form.register("patientName")}
-                    placeholder="Patient Full Name"
-                  />
-                  <Input
-                    type="number"
-                    {...form.register("patientAge")}
-                    placeholder="Age"
-                  />
                 </div>
-                <Input
-                  {...form.register("patientPhoneNumber")}
-                  placeholder="Contact Number"
-                />
               </div>
+            )}
 
-              <div className="space-y-3">
-                <Label>Appointment Details</Label>
-                <Select
-                  onValueChange={(val) => form.setValue("specialization", val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Doctor Specialty" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="general">General Physician</SelectItem>
-                    <SelectItem value="cardio">Cardiologist</SelectItem>
-                    <SelectItem value="derma">Dermatologist</SelectItem>
-                    <SelectItem value="pediatric">Pediatrician</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input type="date" {...form.register("preferredDate")} />
+
+            {/* ===== CARETAKER SERVICES ===== */}
+            {watchType === "caretaker" && (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Service Type</Label>
                   <Select
-                    onValueChange={(val) =>
-                      form.setValue("preferredTimeSlot", val)
-                    }
+                    onValueChange={(val) => form.setValue("serviceType", val)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Time" />
+                      <SelectValue placeholder="Select service" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="9-10">9:00 AM - 10:00 AM</SelectItem>
-                      <SelectItem value="10-11">10:00 AM - 11:00 AM</SelectItem>
-                      <SelectItem value="11-12">11:00 AM - 12:00 PM</SelectItem>
+                      <SelectItem value="elderly">Elderly Care</SelectItem>
+                      <SelectItem value="patient">
+                        Patient Care (Post-surgery)
+                      </SelectItem>
+                      <SelectItem value="child">Child Care</SelectItem>
+                      <SelectItem value="disabled">Disabled Care</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              <div className="space-y-3">
-                <Label>Medical History</Label>
-                <Textarea
-                  {...form.register("symptoms")}
-                  placeholder="Describe your symptoms, when they started, severity"
-                  rows={3}
-                />
-                <Textarea
-                  {...form.register("existingConditions")}
-                  placeholder="Existing medical conditions (diabetes, hypertension, etc.)"
-                  rows={2}
-                />
-                <Input
-                  {...form.register("currentMedications")}
-                  placeholder="Current medications"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ===== DIAGNOSTIC TESTS ===== */}
-          {watchType === "diagnostic" && (
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Label>Select Test Package</Label>
-                <Select
-                  onValueChange={(val) => form.setValue("testNames", [val])}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose test" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full-body">
-                      Full Body Checkup - $999 (70+ tests)
-                    </SelectItem>
-                    <SelectItem value="diabetes">
-                      Diabetes Care - $599 (12 tests)
-                    </SelectItem>
-                    <SelectItem value="cardiac">
-                      Cardiac Profile - $1299 (25 tests)
-                    </SelectItem>
-                    <SelectItem value="thyroid">
-                      Thyroid Profile - $399 (3 tests)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Patient Details</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    {...form.register("patientName")}
-                    placeholder="Patient Name"
-                  />
-                  <Input
-                    type="number"
-                    {...form.register("patientAge")}
-                    placeholder="Age"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Test Preparation</Label>
-                <Select
-                  onValueChange={(val) => form.setValue("isFasting", val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Is fasting required?" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="yes">
-                      Yes - 8-10 hours fasting
-                    </SelectItem>
-                    <SelectItem value="no">No - No fasting needed</SelectItem>
-                  </SelectContent>
-                </Select>
-                {form.watch("isFasting") === "yes" && (
-                  <Input
-                    type="time"
-                    {...form.register("lastMealTime")}
-                    placeholder="Last meal time"
-                  />
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <Label>Collection Address</Label>
-                <Textarea
-                  {...form.register("collectionAddress")}
-                  placeholder="Full address for home sample collection"
-                  rows={2}
-                />
-                <div className="grid grid-cols-2 gap-4">
-                  <Input type="date" {...form.register("preferredDate")} />
-                  <Select
-                    onValueChange={(val) =>
-                      form.setValue("preferredTimeSlot", val)
-                    }
-                  >
+                <div className="space-y-3">
+                  <Label>Duration</Label>
+                  <Select onValueChange={(val) => form.setValue("duration", val)}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Time slot" />
+                      <SelectValue placeholder="Select duration" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="6-9">6 AM - 9 AM</SelectItem>
-                      <SelectItem value="9-12">9 AM - 12 PM</SelectItem>
-                      <SelectItem value="12-15">12 PM - 3 PM</SelectItem>
-                      <SelectItem value="15-18">3 PM - 6 PM</SelectItem>
+                      <SelectItem value="12-hours">12 hours/day</SelectItem>
+                      <SelectItem value="24-hours">24 hours (Live-in)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div className="space-y-3">
+                  <Label>Caretaker Gender</Label>
+                  <Select onValueChange={(val) => form.setValue("caretakerGender", val)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select preferred gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any</SelectItem>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3">
+                  <Label>Start Date</Label>
+                  <Input type="date" {...form.register("startDate")} />
+                </div>
+
+                <div className="space-y-3">
+                  <Label>Special Requirements</Label>
+                  <Textarea
+                    {...form.register("requirements")}
+                    placeholder="E.g., need male caretaker, experience with bedridden patients, etc."
+                    rows={3}
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
+            {/* ===== NURSING SERVICES ===== */}
+            {watchType === "nursing" && (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Nursing Procedure Needed</Label>
+                  <Select
+                    onValueChange={(val) => form.setValue("serviceType", val)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select procedure" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wound">Wound Dressing</SelectItem>
+                      <SelectItem value="injection">
+                        Injection/IV Administration
+                      </SelectItem>
+                      <SelectItem value="catheter">Catheter Care</SelectItem>
+                      <SelectItem value="bedsores">
+                        Bed Sore Management
+                      </SelectItem>
+                      <SelectItem value="postop">Post-operative Care</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-          {/* ===== CARETAKER SERVICES ===== */}
-          {watchType === "caretaker" && (
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Label>Service Type</Label>
-                <Select
-                  onValueChange={(val) => form.setValue("serviceType", val)}
+                <div className="space-y-3">
+                  <Label>Duration</Label>
+                  <Select onValueChange={(val) => form.setValue("duration", val)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select duration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1-hour">1 hour</SelectItem>
+                      <SelectItem value="2-hours">2 hours</SelectItem>
+                      <SelectItem value="4-hours">4 hours</SelectItem>
+                      <SelectItem value="8-hours">8 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3">
+                  <Label>Additional Notes</Label>
+                  <Textarea
+                    {...form.register("requirements")}
+                    placeholder="Any specific instructions from doctor"
+                    rows={2}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Terms & Conditions Checkbox with Modal Trigger */}
+            <div className="flex items-start space-x-2 pt-4 border-t">
+              <Checkbox
+                id="terms"
+                checked={form.watch("agreedToTerms")}
+                onCheckedChange={(c) =>
+                  form.setValue("agreedToTerms", c as boolean)
+                }
+              />
+              <Label htmlFor="terms" className="text-sm text-slate-600">
+                I have read and agree to the{" "}
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-teal-600 underline font-medium hover:text-teal-700"
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="elderly">Elderly Care</SelectItem>
-                    <SelectItem value="patient">
-                      Patient Care (Post-surgery)
-                    </SelectItem>
-                    <SelectItem value="child">Child Care</SelectItem>
-                    <SelectItem value="disabled">Disabled Care</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Duration</Label>
-                <Select onValueChange={(val) => form.setValue("duration", val)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select duration" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="4-hours">4 hours/day</SelectItem>
-                    <SelectItem value="8-hours">
-                      8 hours/day (Day shift)
-                    </SelectItem>
-                    <SelectItem value="12-hours">12 hours/day</SelectItem>
-                    <SelectItem value="24-hours">24 hours (Live-in)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Start Date</Label>
-                <Input type="date" {...form.register("startDate")} />
-              </div>
-
-              <div className="space-y-3">
-                <Label>Special Requirements</Label>
-                <Textarea
-                  {...form.register("requirements")}
-                  placeholder="E.g., need male caretaker, experience with bedridden patients, etc."
-                  rows={3}
-                />
-              </div>
+                  Terms & Conditions
+                </button>{" "}
+                for this service.
+              </Label>
             </div>
-          )}
+            {form.formState.errors.agreedToTerms && (
+              <p className="text-sm text-red-500">
+                {form.formState.errors.agreedToTerms.message}
+              </p>
+            )}
 
-          {/* ===== NURSING SERVICES ===== */}
-          {watchType === "nursing" && (
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Label>Nursing Procedure Needed</Label>
-                <Select
-                  onValueChange={(val) => form.setValue("serviceType", val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select procedure" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="wound">Wound Dressing</SelectItem>
-                    <SelectItem value="injection">
-                      Injection/IV Administration
-                    </SelectItem>
-                    <SelectItem value="catheter">Catheter Care</SelectItem>
-                    <SelectItem value="bedsores">
-                      Bed Sore Management
-                    </SelectItem>
-                    <SelectItem value="postop">Post-operative Care</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Duration</Label>
-                <Select onValueChange={(val) => form.setValue("duration", val)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select duration" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1-hour">1 hour</SelectItem>
-                    <SelectItem value="2-hours">2 hours</SelectItem>
-                    <SelectItem value="4-hours">4 hours</SelectItem>
-                    <SelectItem value="8-hours">8 hours</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Additional Notes</Label>
-                <Textarea
-                  {...form.register("requirements")}
-                  placeholder="Any specific instructions from doctor"
-                  rows={2}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Terms & Conditions Checkbox with Modal Trigger */}
-          <div className="flex items-start space-x-2 pt-4 border-t">
-            <Checkbox
-              id="terms"
-              checked={form.watch("agreedToTerms")}
-              onCheckedChange={(c) =>
-                form.setValue("agreedToTerms", c as boolean)
-              }
-            />
-            <Label htmlFor="terms" className="text-sm text-slate-600">
-              I have read and agree to the{" "}
-              <button
-                type="button"
-                onClick={() => setShowTermsModal(true)}
-                className="text-teal-600 underline font-medium hover:text-teal-700"
-              >
-                Terms & Conditions
-              </button>{" "}
-              for this service.
-            </Label>
-          </div>
-          {form.formState.errors.agreedToTerms && (
-            <p className="text-sm text-red-500">
-              {form.formState.errors.agreedToTerms.message}
-            </p>
-          )}
-
-          <Button
-            type="submit"
-            className="w-full bg-teal-600 hover:bg-teal-700"
-            disabled={isSubmitting}
-          >
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {watchType === "ambulance" && watchUrgency === "immediate"
-              ? "🚨 Request Ambulance Now"
-              : "Submit Request"}
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              className="w-full bg-teal-600 hover:bg-teal-700"
+              disabled={isSubmitting}
+            >
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {watchType === "ambulance" && watchUrgency === "immediate"
+                ? "🚨 Request Ambulance Now"
+                : "Submit Request"}
+            </Button>
+          </form>
         )}
       </div>
 

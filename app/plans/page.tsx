@@ -1,11 +1,14 @@
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
-import { Check, Star } from "lucide-react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
-import { parseDescriptionPoints } from "@/lib/utils"
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Header } from "@/components/header";
+import { Footer } from "@/components/footer";
+import { Check, Star, Globe, MapPin } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { parseDescriptionPoints } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 interface Plan {
     id: string;
@@ -14,33 +17,52 @@ interface Plan {
     price: number;
     duration_days: number;
     features: string[];
+    allowed_services: string[];
     is_active: boolean;
     is_featured: boolean;
 }
 
-async function getPublicPlans(): Promise<Plan[]> {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-        .from('plans')
-        .select('*')
-        .eq('status', 'active')
-        .order('price', { ascending: true });
+const SYSTEM_SERVICES_MAP: Record<string, string> = {
+    'ambulance': 'Ambulance',
+    'medical_consultation': 'Doctor Consultation',
+    'diagnostic': 'Lab Tests / Diagnostic',
+    'caretaker': 'Caretaker',
+    'nursing': 'Nursing',
+};
 
-    if (error || !data) {
-        return [];
-    }
-    return data as Plan[];
-}
+type CountryMode = 'us' | 'india';
 
-export default async function PlansPage() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export default function PlansPage() {
+    const router = useRouter();
+    const [plans, setPlans] = useState<Plan[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [countryMode, setCountryMode] = useState<CountryMode>('us');
 
-    if (user) {
-        redirect('/shop/plans')
-    }
+    useEffect(() => {
+        const fetchPlans = async () => {
+            const supabase = createClient();
 
-    const plans = await getPublicPlans()
+            // Check if user is logged in — redirect to shop/plans
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                router.push('/shop/plans');
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from('plans')
+                .select('*')
+                .eq('status', 'active')
+                .order('price', { ascending: true });
+
+            if (!error && data) setPlans(data as Plan[]);
+            setLoading(false);
+        };
+        fetchPlans();
+    }, [router]);
+
+    const isIndia = countryMode === 'india';
+    const currency = isIndia ? '₹' : '$';
 
     return (
         <>
@@ -58,58 +80,77 @@ export default async function PlansPage() {
                     </div>
                 </section>
 
+
+
                 {/* Plans Grid */}
-                <section className="py-16 px-4 md:px-6">
-                    <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">
-                        {plans.map((plan) => (
-                            <div
-                                key={plan.id}
-                                className={`relative p-8 rounded-2xl border-2 transition-all duration-300 ${plan.is_featured
-                                        ? 'border-primary bg-gradient-to-b from-primary/5 to-primary/10 shadow-xl scale-105'
-                                        : 'border-border bg-card hover:border-primary/50 hover:shadow-lg'
-                                    }`}
-                            >
-                                {plan.is_featured && (
-                                    <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                                        <div className="flex items-center gap-1 bg-primary text-primary-foreground px-4 py-1 rounded-full text-sm font-medium">
-                                            <Star className="w-4 h-4 fill-current" />
-                                            Most Popular
-                                        </div>
-                                    </div>
-                                )}
-                                <div className="text-center mb-6">
-                                    <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                                    <div className="flex items-baseline justify-center gap-1">
-                                        <span className="text-4xl font-bold text-primary">${Number(plan.price || 0).toLocaleString()}</span>
-                                        <span className="text-muted-foreground">/year</span>
-                                    </div>
-                                    <div className="text-muted-foreground text-sm mt-3 text-left space-y-1 mx-auto max-w-[280px]">
-                                        {parseDescriptionPoints(plan.description).map((point, idx) => (
-                                            <div key={idx} className="flex items-start gap-2">
-                                                <span className="text-primary select-none mt-1 shrink-0">•</span>
-                                                <span>{point}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <ul className="space-y-3 mb-8">
-                                    {(plan.features || []).map((feature, idx) => (
-                                        <li key={idx} className="flex items-start gap-3">
-                                            <Check className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                                            <span className="text-muted-foreground">{feature}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                                <Link href={`/checkout-auth/${plan.id}`} className="block">
-                                    <Button
-                                        className={`w-full ${plan.is_featured ? 'bg-primary hover:bg-primary/90' : ''}`}
-                                        variant={plan.is_featured ? 'default' : 'outline'}
-                                    >
-                                        Get Started
-                                    </Button>
-                                </Link>
+                <section className="py-8 px-4 md:px-6">
+                    <div className="max-w-6xl mx-auto">
+                        {loading ? (
+                            <div className="flex items-center justify-center h-64">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
                             </div>
-                        ))}
+                        ) : (
+                            <div className="grid md:grid-cols-3 gap-8">
+                                {plans.map((plan) => (
+                                    <div
+                                        key={plan.id}
+                                        className={`relative p-8 rounded-2xl border-2 transition-all duration-300 ${plan.is_featured
+                                            ? 'border-primary bg-gradient-to-b from-primary/5 to-primary/10 shadow-xl scale-105'
+                                            : 'border-border bg-card hover:border-primary/50 hover:shadow-lg'
+                                        }`}
+                                    >
+                                        {plan.is_featured && (
+                                            <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                                                <div className="flex items-center gap-1 bg-primary text-primary-foreground px-4 py-1 rounded-full text-sm font-medium">
+                                                    <Star className="w-4 h-4 fill-current" />
+                                                    Most Popular
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="text-center mb-6">
+                                            <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
+                                            <div className="flex items-baseline justify-center gap-1">
+                                                <span className="text-4xl font-bold text-primary">
+                                                    {currency}{Number(plan.price || 0).toLocaleString()}
+                                                </span>
+                                                <span className="text-muted-foreground">/year</span>
+                                            </div>
+                                            {isIndia && (
+                                                <p className="text-xs text-amber-600 mt-1">+ 18% GST at checkout</p>
+                                            )}
+                                            <div className="text-muted-foreground text-sm mt-3 text-left space-y-1 mx-auto max-w-[280px]">
+                                                {parseDescriptionPoints(plan.description).map((point, idx) => (
+                                                    <div key={idx} className="flex items-start gap-2">
+                                                        <span className="text-primary select-none mt-1 shrink-0">•</span>
+                                                        <span>{point}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <ul className="space-y-3 mb-8">
+                                            {(() => {
+                                                const services = (plan.allowed_services || []).map(s => SYSTEM_SERVICES_MAP[s] || s);
+                                                const allFeatures = Array.from(new Set([...services, ...(plan.features || [])]));
+                                                return allFeatures.map((feature, idx) => (
+                                                    <li key={idx} className="flex items-start gap-3">
+                                                        <Check className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                                                        <span className="text-muted-foreground">{feature}</span>
+                                                    </li>
+                                                ));
+                                            })()}
+                                        </ul>
+                                        <Link href={`/checkout-auth/${plan.id}`} className="block">
+                                            <Button
+                                                className={`w-full ${plan.is_featured ? 'bg-primary hover:bg-primary/90' : ''}`}
+                                                variant={plan.is_featured ? 'default' : 'outline'}
+                                            >
+                                                Get Started
+                                            </Button>
+                                        </Link>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </section>
 
@@ -146,5 +187,5 @@ export default async function PlansPage() {
             </main>
             <Footer />
         </>
-    )
+    );
 }

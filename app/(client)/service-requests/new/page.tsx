@@ -65,10 +65,24 @@ function NewServiceRequestContent() {
                 <div className="p-6">
                     {/* STEP 1: Plan + Policy Holder selection */}
                     {!context && (
-                        <PlanPolicySelector
-                            requestedServiceType={typeFromUrl || undefined}
-                            onContextSelected={handleContextSelected}
-                        />
+                        <div className="space-y-6">
+                            <PlanPolicySelector
+                                requestedServiceType={typeFromUrl || undefined}
+                                onContextSelected={handleContextSelected}
+                            />
+                            <div className="text-center pt-4 border-t border-slate-100 mt-6">
+                                <span className="text-slate-500 text-sm">Need help with something else? </span>
+                                <button
+                                    onClick={() => handleContextSelected({
+                                        plan: { memberId: 'none', planId: 'none', planName: 'General Request', cardUniqueId: 'N/A', validTill: '', allowedServices: ['general'], policyHolders: [] },
+                                        policyHolder: { kycId: 'none', holderFullName: 'Myself', relation: 'Self', photoUrl: null, memberId: 'none' }
+                                    })}
+                                    className="text-teal-600 hover:text-teal-700 text-sm font-semibold hover:underline"
+                                >
+                                    Submit a General Service Request
+                                </button>
+                            </div>
+                        </div>
                     )}
 
                     {/* STEP 2: Service form (after context selected) */}

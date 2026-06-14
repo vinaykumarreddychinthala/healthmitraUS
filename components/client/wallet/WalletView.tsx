@@ -12,9 +12,10 @@ interface WalletViewProps {
     stats: any;
     billRefunds?: any[];
     userName?: string;
+    canWithdraw?: boolean;
 }
 
-export function WalletView({ wallet, stats, billRefunds = [], userName = '' }: WalletViewProps) {
+export function WalletView({ wallet, stats, billRefunds = [], userName = '', canWithdraw = true }: WalletViewProps) {
     const [isAddMoneyOpen, setIsAddMoneyOpen] = useState(false);
     const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
 
@@ -30,6 +31,16 @@ export function WalletView({ wallet, stats, billRefunds = [], userName = '' }: W
         toast.success('Wallet Payment', {
             description: 'Select a service to pay using your wallet balance.'
         });
+    };
+
+    const handleWithdrawClick = () => {
+        if (!canWithdraw) {
+            toast.error('Withdrawal Locked', {
+                description: 'You must complete and verify KYC for all your plan members before you can withdraw from your wallet.'
+            });
+            return;
+        }
+        setIsWithdrawOpen(true);
     };
 
     return (
@@ -102,7 +113,7 @@ export function WalletView({ wallet, stats, billRefunds = [], userName = '' }: W
                                     <Upload size={16} /> Add Money
                                 </button>
                                 <button
-                                    onClick={() => setIsWithdrawOpen(true)}
+                                    onClick={handleWithdrawClick}
                                     className="bg-teal-700/50 hover:bg-teal-700 text-white border border-teal-400/30 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 backdrop-blur-sm"
                                 >
                                     <Download size={16} /> Withdraw
@@ -165,7 +176,7 @@ export function WalletView({ wallet, stats, billRefunds = [], userName = '' }: W
                         </div>
                         <div className="p-3 bg-slate-50 border-t border-slate-100">
                             <button
-                                onClick={() => setIsWithdrawOpen(true)}
+                                onClick={handleWithdrawClick}
                                 className="w-full py-2 text-sm font-semibold text-teal-600 hover:text-teal-700 flex items-center justify-center gap-1"
                             >
                                 Withdraw Now <ChevronRight size={14} />

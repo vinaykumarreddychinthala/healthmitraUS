@@ -1,8 +1,7 @@
 /**
  * cardDrawer.ts
- * Renders a HealthMitra e-card directly onto a canvas using the Canvas 2D API.
- * This avoids html2canvas entirely, which fails with modern CSS color functions
- * like oklch() / lab() used by Tailwind v4.
+ * Renders HealthMitra e-cards (front + back) onto canvas using Canvas 2D API.
+ * Avoids html2canvas which breaks with Tailwind v4 oklch() colors.
  */
 
 export interface CardData {
@@ -21,19 +20,16 @@ export interface CardData {
     emergencyContact: string;
     adminVerified: boolean;
     photoUrl?: string;
+    planFeatures?: string[];
 }
 
+// ─── Constants ───────────────────────────────────────────────────────────────
 const CARD_W = 860;
-const CARD_H = 420;
+const CARD_H = 480;
 const RADIUS = 20;
-const TEAL_DARK = '#0f766e';
-const TEAL_MID = '#0d9488';
-const TEAL_LIGHT = '#14b8a6';
-const TEAL_PALE = 'rgba(255,255,255,0.12)';
 const WHITE = '#ffffff';
-const WHITE_DIM = 'rgba(255,255,255,0.75)';
-const WHITE_FAINT = 'rgba(255,255,255,0.4)';
 
+// ─── Utilities ───────────────────────────────────────────────────────────────
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -48,8 +44,30 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
     ctx.closePath();
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D) {
-    // Main gradient background
+function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number): number {
+    const words = text.split(' ');
+    let line = '';
+    let currentY = y;
+    for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && n > 0) {
+            ctx.fillText(line.trim(), x, currentY);
+            line = words[n] + ' ';
+            currentY += lineHeight;
+        } else {
+            line = testLine;
+        }
+    }
+    ctx.fillText(line.trim(), x, currentY);
+    return currentY;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FRONT CARD
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function drawFrontBackground(ctx: CanvasRenderingContext2D) {
     const grad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
     grad.addColorStop(0, '#0f766e');
     grad.addColorStop(0.5, '#0d9488');
@@ -60,60 +78,45 @@ function drawBackground(ctx: CanvasRenderingContext2D) {
 
     // Decorative circles
     ctx.save();
-    ctx.globalAlpha = 0.07;
+    ctx.globalAlpha = 0.06;
     ctx.fillStyle = WHITE;
-    ctx.beginPath();
-    ctx.arc(CARD_W - 30, -60, 200, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(-30, CARD_H + 40, 160, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 0.05;
-    ctx.beginPath();
-    ctx.arc(CARD_W / 2, CARD_H / 2, 120, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(CARD_W - 40, -80, 220, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-40, CARD_H + 60, 170, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.04;
+    ctx.beginPath(); ctx.arc(CARD_W / 2, CARD_H / 2, 130, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 }
 
-function drawHeader(ctx: CanvasRenderingContext2D, adminVerified: boolean) {
-    // Logo text
+function drawFrontHeader(ctx: CanvasRenderingContext2D, adminVerified: boolean) {
+    // Brand
     ctx.fillStyle = WHITE;
-    ctx.font = 'bold 22px Inter, system-ui, sans-serif';
+    ctx.font = 'bold 24px Inter, system-ui, sans-serif';
     ctx.fillText('HEALTHMITRA', 36, 54);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '12px Inter, system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '11px Inter, system-ui, sans-serif';
     ctx.fillText('Your Health, Our Priority', 36, 74);
 
     // Status badge
-    const badgeX = CARD_W - 200;
-    const badgeY = 30;
-    const badgeW = 160;
-    const badgeH = 32;
-
-    roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 16);
-    ctx.fillStyle = adminVerified ? '#4ade80' : '#fb923c';
+    const bx = CARD_W - 180, by = 30, bw = 150, bh = 30;
+    roundRect(ctx, bx, by, bw, bh, 15);
+    ctx.fillStyle = adminVerified ? '#4ade80' : '#fbbf24';
     ctx.fill();
-
-    ctx.fillStyle = adminVerified ? '#14532d' : '#431407';
-    ctx.font = 'bold 12px Inter, system-ui, sans-serif';
+    ctx.fillStyle = adminVerified ? '#14532d' : '#78350f';
+    ctx.font = 'bold 11px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(adminVerified ? '✓ Active' : '⚠ Pending Verification', badgeX + badgeW / 2, badgeY + 21);
+    ctx.fillText(adminVerified ? '✓  Active' : '⚠  Pending Verification', bx + bw / 2, by + 20);
     ctx.textAlign = 'left';
 }
 
 async function drawMemberPhoto(ctx: CanvasRenderingContext2D, photoUrl: string | undefined) {
-    const photoX = 36;
-    const photoY = 100;
-    const photoW = 70;
-    const photoH = 90;
+    const px = 36, py = 100, pw = 74, ph = 96;
 
-    // Photo placeholder box
-    roundRect(ctx, photoX, photoY, photoW, photoH, 10);
+    roundRect(ctx, px, py, pw, ph, 10);
     ctx.fillStyle = 'rgba(255,255,255,0.18)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
     if (photoUrl) {
@@ -126,210 +129,324 @@ async function drawMemberPhoto(ctx: CanvasRenderingContext2D, photoUrl: string |
                 i.src = photoUrl;
             });
             ctx.save();
-            roundRect(ctx, photoX, photoY, photoW, photoH, 10);
+            roundRect(ctx, px, py, pw, ph, 10);
             ctx.clip();
-            ctx.drawImage(img, photoX, photoY, photoW, photoH);
+            ctx.drawImage(img, px, py, pw, ph);
             ctx.restore();
         } catch {
-            drawPersonIcon(ctx, photoX + photoW / 2, photoY + photoH / 2);
+            drawPersonIcon(ctx, px + pw / 2, py + ph / 2);
         }
     } else {
-        drawPersonIcon(ctx, photoX + photoW / 2, photoY + photoH / 2);
+        drawPersonIcon(ctx, px + pw / 2, py + ph / 2);
     }
 }
 
 function drawPersonIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.beginPath();
-    ctx.arc(cx, cy - 14, 16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(cx, cy + 32, 26, 0, Math.PI);
-    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.arc(cx, cy - 16, 17, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy + 34, 28, 0, Math.PI); ctx.fill();
 }
 
 function drawMemberInfo(ctx: CanvasRenderingContext2D, card: CardData) {
-    const startX = 128;
-    const startY = 108;
+    const sx = 128, sy = 108;
 
-    // Name
     ctx.fillStyle = WHITE;
-    ctx.font = 'bold 20px Inter, system-ui, sans-serif';
-    ctx.fillText(card.name.toUpperCase(), startX, startY);
+    ctx.font = 'bold 22px Inter, system-ui, sans-serif';
+    ctx.fillText(card.name.toUpperCase(), sx, sy);
 
-    // IDs
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.font = '11px Inter, system-ui, sans-serif';
-    ctx.fillText('Card ID:', startX, startY + 22);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '10px Inter, system-ui, sans-serif';
+    ctx.fillText('Card ID:', sx, sy + 24);
     ctx.fillStyle = WHITE;
-    ctx.font = 'bold 11px "Courier New", monospace';
-    ctx.fillText(card.cardUniqueId, startX + 48, startY + 22);
+    ctx.font = 'bold 10px "Courier New", monospace';
+    ctx.fillText(card.cardUniqueId, sx + 50, sy + 24);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.font = '11px Inter, system-ui, sans-serif';
-    ctx.fillText('Member ID:', startX, startY + 38);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '10px Inter, system-ui, sans-serif';
+    ctx.fillText('Member ID:', sx, sy + 40);
     ctx.fillStyle = WHITE;
-    ctx.font = '11px "Courier New", monospace';
-    ctx.fillText(card.memberId, startX + 66, startY + 38);
+    ctx.font = '10px "Courier New", monospace';
+    ctx.fillText(card.memberId, sx + 68, sy + 40);
 }
 
 function drawInfoGrid(ctx: CanvasRenderingContext2D, card: CardData) {
-    const gridX = 36;
-    const gridY = 210;
-    const gridW = 360;
-    const gridH = 80;
+    const gx = 36, gy = 215, gw = 390, gh = 90;
 
-    // Info panel
-    roundRect(ctx, gridX, gridY, gridW, gridH, 10);
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    roundRect(ctx, gx, gy, gw, gh, 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.11)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
     const cells = [
         { label: 'DOB', value: card.dob || 'N/A' },
-        { label: 'Age', value: `${card.age || 'N/A'} yrs` },
-        { label: 'Gender', value: card.gender === 'M' ? 'Male' : card.gender === 'F' ? 'Female' : 'Other' },
-        { label: 'Blood Group', value: card.bloodGroup || 'N/A' },
+        { label: 'Age', value: card.age ? `${card.age} yrs` : 'N/A' },
+        { label: 'Gender', value: card.gender === 'M' ? 'Male' : card.gender === 'F' ? 'Female' : (card.gender || 'N/A') },
+        { label: 'Blood Group', value: card.bloodGroup || '—' },
         { label: 'Relation', value: card.relation || 'N/A' },
     ];
 
-    const colW = gridW / 3;
+    const colW = gw / 3;
     cells.forEach((cell, i) => {
         const col = i % 3;
         const row = Math.floor(i / 3);
-        const cx = gridX + col * colW + 12;
-        const cy = gridY + row * 42 + 20;
+        const cx = gx + col * colW + 14;
+        const cy = gy + row * 46 + 22;
 
         ctx.fillStyle = 'rgba(153,246,228,0.9)';
         ctx.font = '9px Inter, system-ui, sans-serif';
         ctx.fillText(cell.label.toUpperCase(), cx, cy);
 
         ctx.fillStyle = WHITE;
-        ctx.font = `bold ${cell.label === 'Blood Group' ? '15' : '12'}px Inter, system-ui, sans-serif`;
-        ctx.fillText(cell.value, cx, cy + 16);
+        const isBG = cell.label === 'Blood Group';
+        ctx.font = `bold ${isBG ? '18' : '12'}px Inter, system-ui, sans-serif`;
+        if (isBG) ctx.fillStyle = '#fca5a5'; // light red for blood group emphasis
+        ctx.fillText(cell.value, cx, cy + (isBG ? 20 : 16));
+        if (isBG) ctx.fillStyle = WHITE;
     });
 }
 
-function drawRightColumn(ctx: CanvasRenderingContext2D, card: CardData, formattedCoverage: string) {
-    const rightX = 430;
-    const rightY = 100;
+function drawRightPanel(ctx: CanvasRenderingContext2D, card: CardData) {
+    const rx = 460, ry = 100;
 
     // Divider
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.beginPath();
-    ctx.moveTo(rightX - 20, 90);
-    ctx.lineTo(rightX - 20, CARD_H - 30);
+    ctx.moveTo(rx - 22, 88);
+    ctx.lineTo(rx - 22, CARD_H - 32);
     ctx.stroke();
 
     // Plan
-    ctx.fillStyle = 'rgba(153,246,228,0.9)';
-    ctx.font = '10px Inter, system-ui, sans-serif';
-    ctx.fillText('PLAN', rightX, rightY);
+    ctx.fillStyle = 'rgba(153,246,228,0.85)';
+    ctx.font = '9px Inter, system-ui, sans-serif';
+    ctx.fillText('PLAN', rx, ry);
     ctx.fillStyle = WHITE;
     ctx.font = 'bold 14px Inter, system-ui, sans-serif';
-    ctx.fillText(card.planName.toUpperCase(), rightX, rightY + 18);
+    ctx.fillText(card.planName.toUpperCase(), rx, ry + 18);
 
-    // Coverage
-    ctx.fillStyle = 'rgba(153,246,228,0.9)';
-    ctx.font = '10px Inter, system-ui, sans-serif';
-    ctx.fillText('COVERAGE', rightX, rightY + 42);
+    // Coverage — always "No Limit"
+    ctx.fillStyle = 'rgba(153,246,228,0.85)';
+    ctx.font = '9px Inter, system-ui, sans-serif';
+    ctx.fillText('COVERAGE', rx, ry + 44);
     ctx.fillStyle = WHITE;
     ctx.font = 'bold 14px Inter, system-ui, sans-serif';
-    ctx.fillText(formattedCoverage, rightX, rightY + 60);
+    ctx.fillText('No Limit', rx, ry + 62);
 
     // Validity box
-    const vX = rightX;
-    const vY = rightY + 80;
-    const vW = CARD_W - rightX - 120;
-    const vH = 68;
-    roundRect(ctx, vX, vY, vW, vH, 10);
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    const vx = rx, vy = ry + 84, vw = CARD_W - rx - 100, vh = 74;
+    roundRect(ctx, vx, vy, vw, vh, 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.11)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(153,246,228,0.9)';
+    ctx.fillStyle = 'rgba(153,246,228,0.85)';
     ctx.font = '9px Inter, system-ui, sans-serif';
-    ctx.fillText('VALIDITY', vX + 12, vY + 18);
+    ctx.fillText('VALIDITY PERIOD', vx + 14, vy + 20);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '11px Inter, system-ui, sans-serif';
-    ctx.fillText('From:', vX + 12, vY + 38);
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '10px Inter, system-ui, sans-serif';
+    ctx.fillText('From:', vx + 14, vy + 40);
     ctx.fillStyle = WHITE;
     ctx.font = 'bold 11px Inter, system-ui, sans-serif';
-    ctx.fillText(card.validFrom || 'N/A', vX + 48, vY + 38);
+    ctx.fillText(card.validFrom || 'N/A', vx + 52, vy + 40);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '11px Inter, system-ui, sans-serif';
-    ctx.fillText('Till:', vX + 12, vY + 56);
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '10px Inter, system-ui, sans-serif';
+    ctx.fillText('Till:', vx + 14, vy + 58);
     ctx.fillStyle = WHITE;
     ctx.font = 'bold 11px Inter, system-ui, sans-serif';
-    ctx.fillText(card.validTill || 'N/A', vX + 40, vY + 56);
+    ctx.fillText(card.validTill || 'N/A', vx + 42, vy + 58);
 
-    // 24/7 support badge
-    const s24X = rightX;
-    const s24Y = vY + vH + 16;
-
-    roundRect(ctx, s24X, s24Y, 40, 24, 6);
-    ctx.fillStyle = '#facc15';
-    ctx.fill();
-    ctx.fillStyle = '#713f12';
-    ctx.font = 'bold 10px Inter, system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('24/7', s24X + 20, s24Y + 16);
-    ctx.textAlign = 'left';
-
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = '9px Inter, system-ui, sans-serif';
-    ctx.fillText('Helpline', s24X + 48, s24Y + 11);
-    ctx.fillStyle = WHITE;
-    ctx.font = 'bold 11px Inter, system-ui, sans-serif';
-    ctx.fillText(card.emergencyContact || '1800-XXX-XXXX', s24X + 48, s24Y + 24);
-
-    // QR placeholder
-    const qrX = CARD_W - 100;
-    const qrY = s24Y - 4;
-    roundRect(ctx, qrX, qrY, 56, 56, 8);
-    ctx.fillStyle = WHITE;
-    ctx.fill();
-    roundRect(ctx, qrX + 4, qrY + 4, 48, 48, 6);
-    ctx.fillStyle = '#1e293b';
-    ctx.fill();
-    ctx.fillStyle = WHITE;
-    ctx.font = 'bold 9px Inter, system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('QR', qrX + 28, qrY + 31);
-    ctx.textAlign = 'left';
 }
 
-function drawFooter(ctx: CanvasRenderingContext2D) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+
+function drawFrontFooter(ctx: CanvasRenderingContext2D) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(36, CARD_H - 42);
     ctx.lineTo(CARD_W - 36, CARD_H - 42);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '10px Inter, system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.40)';
+    ctx.font = '9px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('HealthMitra Healthcare — This is a computer-generated card and is valid only when verified by admin.', CARD_W / 2, CARD_H - 18);
+    ctx.fillText('HealthMitra Healthcare — This is a computer-generated card. Valid only when verified by admin.', CARD_W / 2, CARD_H - 18);
     ctx.textAlign = 'left';
 }
 
-export async function drawCardToCanvas(card: CardData): Promise<HTMLCanvasElement> {
-    const coverageAmount = card.coverageAmount ?? 0;
-    const formattedCoverage = coverageAmount > 0
-        ? `$${coverageAmount.toLocaleString('en-US')}`
-        : '$0';
+// ═══════════════════════════════════════════════════════════════════════════════
+// BACK CARD
+// ═══════════════════════════════════════════════════════════════════════════════
 
+function drawBackCard(ctx: CanvasRenderingContext2D, card: CardData) {
+    // White background
+    roundRect(ctx, 0, 0, CARD_W, CARD_H, RADIUS);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Top header strip
+    const headerH = 56;
+    roundRect(ctx, 0, 0, CARD_W, headerH, RADIUS);
+    const headerGrad = ctx.createLinearGradient(0, 0, CARD_W, 0);
+    headerGrad.addColorStop(0, '#0f766e');
+    headerGrad.addColorStop(1, '#0891b2');
+    ctx.fillStyle = headerGrad;
+    ctx.fill();
+
+    ctx.fillStyle = WHITE;
+    ctx.font = 'bold 16px Inter, system-ui, sans-serif';
+    ctx.fillText('HEALTHMITRA', 36, 26);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '10px Inter, system-ui, sans-serif';
+    ctx.fillText('Plan Benefits & Contacts', 36, 44);
+
+    // Admin verified badge on header
+    const bv = card.adminVerified;
+    const bBg = bv ? '#4ade80' : '#fbbf24';
+    const bFg = bv ? '#14532d' : '#78350f';
+    roundRect(ctx, CARD_W - 170, 14, 140, 28, 14);
+    ctx.fillStyle = bBg;
+    ctx.fill();
+    ctx.fillStyle = bFg;
+    ctx.font = 'bold 10px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(bv ? '✓  Verified by Admin' : '⚠  Pending Verification', CARD_W - 100, 33);
+    ctx.textAlign = 'left';
+
+    // BENEFITS column
+    const bx = 36, by = 78;
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 9px Inter, system-ui, sans-serif';
+    ctx.fillText('KEY BENEFITS', bx, by);
+
+    const defaultBenefits = [
+        'Cashless Hospitalization at 1000+ hospitals',
+        'OPD Coverage – Unlimited as per Plan',
+        'Unlimited Diagnostic Tests – 30% to 50% discount',
+        'Medicine Home Delivery on 30% discount',
+        'Free Annual Health Checkup (1 per member)',
+        'Unlimited Telemedicine Consultations',
+        'Emergency Ambulance Service',
+    ];
+    const benefits = (card.planFeatures && card.planFeatures.length > 0) ? card.planFeatures : defaultBenefits;
+
+    ctx.font = '11px Inter, system-ui, sans-serif';
+    let curY = by + 20;
+    const maxBenefitY = CARD_H - 60;
+    for (const benefit of benefits) {
+        if (curY >= maxBenefitY) break;
+        // Check mark
+        ctx.fillStyle = '#22c55e';
+        ctx.font = 'bold 12px Inter, system-ui, sans-serif';
+        ctx.fillText('✓', bx, curY);
+        // Text
+        ctx.fillStyle = '#334155';
+        ctx.font = '11px Inter, system-ui, sans-serif';
+        const nextY = wrapText(ctx, benefit, bx + 18, curY, 340, 16);
+        curY = nextY + 22;
+    }
+
+    // DIVIDER
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(420, 70);
+    ctx.lineTo(420, CARD_H - 36);
+    ctx.stroke();
+
+    // RIGHT PANEL — Plan details
+    const rx = 440, ry = 78;
+
+    // Plan card box
+    roundRect(ctx, rx, ry, CARD_W - rx - 30, 90, 12);
+    const planGrad = ctx.createLinearGradient(rx, ry, rx, ry + 90);
+    planGrad.addColorStop(0, '#0d9488');
+    planGrad.addColorStop(1, '#0891b2');
+    ctx.fillStyle = planGrad;
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '9px Inter, system-ui, sans-serif';
+    ctx.fillText('ACTIVE PLAN', rx + 14, ry + 18);
+    ctx.fillStyle = WHITE;
+    ctx.font = 'bold 14px Inter, system-ui, sans-serif';
+    ctx.fillText(card.planName, rx + 14, ry + 36);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '9px Inter, system-ui, sans-serif';
+    ctx.fillText('Coverage: ', rx + 14, ry + 56);
+    ctx.fillStyle = WHITE;
+    ctx.font = 'bold 12px Inter, system-ui, sans-serif';
+    ctx.fillText('No Limit', rx + 66, ry + 56);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '9px Inter, system-ui, sans-serif';
+    ctx.fillText(`Valid: ${card.validFrom}  →  ${card.validTill}`, rx + 14, ry + 74);
+
+    // SUPPORT section
+    const sy = ry + 110;
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 9px Inter, system-ui, sans-serif';
+    ctx.fillText('SUPPORT', rx, sy);
+
+    const contacts = [
+        { icon: '📞', label: '9818823106' },
+        { icon: '✉', label: 'service@healthmitraus.com' },
+        { icon: '🌐', label: 'www.healthmitraus.com' },
+    ];
+
+    let cy2 = sy + 20;
+    for (const c of contacts) {
+        // Icon circle
+        roundRect(ctx, rx, cy2 - 14, 24, 24, 6);
+        ctx.fillStyle = '#f0fdfa';
+        ctx.fill();
+        ctx.strokeStyle = '#99f6e4';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = '#134e4a';
+        ctx.font = '11px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(c.icon, rx + 12, cy2 + 2);
+        ctx.textAlign = 'left';
+
+        ctx.fillStyle = '#334155';
+        ctx.font = '11px Inter, system-ui, sans-serif';
+        ctx.fillText(c.label, rx + 32, cy2 + 2);
+        cy2 += 34;
+    }
+
+    // Bottom footer line
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(36, CARD_H - 36);
+    ctx.lineTo(CARD_W - 36, CARD_H - 36);
+    ctx.stroke();
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '9px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('This is a system-generated e-card issued by HealthMitra. Valid only with admin verification.', CARD_W / 2, CARD_H - 16);
+    ctx.textAlign = 'left';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PUBLIC DRAW FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function drawFrontToCanvas(card: CardData): Promise<HTMLCanvasElement> {
     const canvas = document.createElement('canvas');
-    // 2x scale for retina/print quality
     canvas.width = CARD_W * 2;
     canvas.height = CARD_H * 2;
     canvas.style.width = `${CARD_W}px`;
@@ -338,44 +455,87 @@ export async function drawCardToCanvas(card: CardData): Promise<HTMLCanvasElemen
     const ctx = canvas.getContext('2d')!;
     ctx.scale(2, 2);
 
-    // Shadow
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 6;
-    drawBackground(ctx);
+    ctx.shadowColor = 'rgba(0,0,0,0.25)';
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetY = 5;
+    drawFrontBackground(ctx);
     ctx.restore();
 
-    drawBackground(ctx);
-    drawHeader(ctx, card.adminVerified);
+    drawFrontBackground(ctx);
+    drawFrontHeader(ctx, card.adminVerified);
     await drawMemberPhoto(ctx, card.photoUrl);
     drawMemberInfo(ctx, card);
     drawInfoGrid(ctx, card);
-    drawRightColumn(ctx, card, formattedCoverage);
-    drawFooter(ctx);
+    drawRightPanel(ctx, card);
+    drawFrontFooter(ctx);
 
     return canvas;
 }
 
+export async function drawBackToCanvas(card: CardData): Promise<HTMLCanvasElement> {
+    const canvas = document.createElement('canvas');
+    canvas.width = CARD_W * 2;
+    canvas.height = CARD_H * 2;
+    canvas.style.width = `${CARD_W}px`;
+    canvas.style.height = `${CARD_H}px`;
+
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(2, 2);
+
+    drawBackCard(ctx, card);
+    return canvas;
+}
+
+/** @deprecated Use drawFrontToCanvas instead */
+export async function drawCardToCanvas(card: CardData): Promise<HTMLCanvasElement> {
+    return drawFrontToCanvas(card);
+}
+
+// ─── Download: Image (front + back stacked) ───────────────────────────────────
 export async function downloadCardAsImage(card: CardData, filename: string): Promise<void> {
-    const canvas = await drawCardToCanvas(card);
+    const [frontCanvas, backCanvas] = await Promise.all([
+        drawFrontToCanvas(card),
+        drawBackToCanvas(card),
+    ]);
+
+    // Combine both into one tall image
+    const combined = document.createElement('canvas');
+    const gap = 40; // px gap between cards
+    combined.width = CARD_W * 2;
+    combined.height = CARD_H * 4 + gap * 2;
+
+    const ctx = combined.getContext('2d')!;
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(0, 0, combined.width, combined.height);
+
+    // Front
+    ctx.drawImage(frontCanvas, 0, gap);
+    // Back
+    ctx.drawImage(backCanvas, 0, CARD_H * 2 + gap * 2);
+
     const link = document.createElement('a');
-    link.download = `${filename}.png`;
-    link.href = canvas.toDataURL('image/png', 1.0);
+    link.download = `${filename}_front_back.png`;
+    link.href = combined.toDataURL('image/png', 1.0);
     link.click();
 }
 
+// ─── Download: PDF (front + back on 2 pages) ─────────────────────────────────
 export async function downloadCardAsPDF(card: CardData, filename: string): Promise<void> {
     const { jsPDF } = await import('jspdf');
-    const canvas = await drawCardToCanvas(card);
-    const imgData = canvas.toDataURL('image/png', 1.0);
 
-    // A4 landscape
+    const [frontCanvas, backCanvas] = await Promise.all([
+        drawFrontToCanvas(card),
+        drawBackToCanvas(card),
+    ]);
+
+    const frontImg = frontCanvas.toDataURL('image/png', 1.0);
+    const backImg = backCanvas.toDataURL('image/png', 1.0);
+
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
 
-    // Maintain aspect ratio, centered on page
     const cardAspect = CARD_W / CARD_H;
     let drawW = pageW - 20;
     let drawH = drawW / cardAspect;
@@ -386,16 +546,22 @@ export async function downloadCardAsPDF(card: CardData, filename: string): Promi
     const x = (pageW - drawW) / 2;
     const y = (pageH - drawH) / 2;
 
-    pdf.addImage(imgData, 'PNG', x, y, drawW, drawH);
+    // Page 1: Front
+    pdf.addImage(frontImg, 'PNG', x, y, drawW, drawH);
+    pdf.setFontSize(8);
+    pdf.setTextColor(150);
+    pdf.text('Front Side', x, y - 3);
+
+    // Page 2: Back
+    pdf.addPage();
+    pdf.addImage(backImg, 'PNG', x, y, drawW, drawH);
+    pdf.text('Back Side', x, y - 3);
+
     pdf.save(`${filename}.pdf`);
 }
 
+// ─── Build email HTML (front only) ───────────────────────────────────────────
 export function buildCardEmailHTML(card: CardData): string {
-    const coverageAmount = card.coverageAmount ?? 0;
-    const formattedCoverage = coverageAmount > 0
-        ? `$${coverageAmount.toLocaleString('en-US')}`
-        : '$0';
-
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -404,28 +570,27 @@ export function buildCardEmailHTML(card: CardData): string {
 <style>
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #f1f5f9; margin: 0; padding: 40px 20px; }
   .wrapper { max-width: 700px; margin: 0 auto; }
-  .card {
-    background: linear-gradient(135deg, #0f766e 0%, #0d9488 55%, #0891b2 100%);
-    border-radius: 20px; padding: 40px; color: #fff;
-    box-shadow: 0 20px 60px rgba(13,148,136,0.35);
-  }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
-  .logo { font-size: 26px; font-weight: 800; letter-spacing: 1px; }
-  .logo sub { font-size: 11px; font-weight: 400; opacity: 0.75; display: block; }
-  .badge { padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .card { background: linear-gradient(135deg, #0f766e 0%, #0d9488 55%, #0891b2 100%); border-radius: 20px; padding: 36px; color: #fff; box-shadow: 0 20px 60px rgba(13,148,136,0.35); }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
+  .logo { font-size: 24px; font-weight: 800; letter-spacing: 1px; }
+  .logo sub { font-size: 11px; font-weight: 400; opacity: 0.7; display: block; }
+  .badge { padding: 6px 16px; border-radius: 20px; font-size: 11px; font-weight: 700; }
   .badge.active { background: #4ade80; color: #14532d; }
-  .badge.pending { background: #fb923c; color: #431407; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-  .section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.65; margin-bottom: 4px; }
-  .section-value { font-size: 15px; font-weight: 700; }
-  .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; background: rgba(255,255,255,0.12); border-radius: 12px; padding: 16px; margin: 24px 0; }
-  .validity-box { background: rgba(255,255,255,0.12); border-radius: 12px; padding: 16px; }
-  .member-name { font-size: 24px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-  .meta { font-size: 11px; opacity: 0.7; margin-bottom: 2px; }
+  .badge.pending { background: #fbbf24; color: #78350f; }
+  .member-row { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px; }
+  .photo-box { width: 72px; height: 90px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.3); overflow: hidden; background: rgba(255,255,255,0.15); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+  .member-name { font-size: 22px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .meta { font-size: 10px; opacity: 0.7; margin-bottom: 2px; }
   .meta span { font-weight: 600; opacity: 1; font-family: monospace; }
-  .footer-note { margin-top: 32px; font-size: 11px; opacity: 0.5; text-align: center; }
-  .support { margin-top: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 16px; font-size: 13px; }
-  .badge-24 { display: inline-block; background: #facc15; color: #713f12; font-weight: 800; font-size: 11px; padding: 3px 8px; border-radius: 5px; margin-right: 8px; }
+  .info-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; background: rgba(255,255,255,0.11); border-radius: 12px; padding: 14px; margin: 16px 0; }
+  .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.65; margin-bottom: 3px; }
+  .value { font-size: 12px; font-weight: 700; }
+  .blood-value { font-size: 18px; font-weight: 900; color: #fca5a5; }
+  .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .plan-box { }
+  .validity-box { background: rgba(255,255,255,0.11); border-radius: 12px; padding: 14px; }
+  .footer-note { margin-top: 24px; font-size: 10px; opacity: 0.45; text-align: center; }
 </style>
 </head>
 <body>
@@ -435,39 +600,36 @@ export function buildCardEmailHTML(card: CardData): string {
       <div class="logo">HEALTHMITRA <sub>Your Health, Our Priority</sub></div>
       <div class="badge ${card.adminVerified ? 'active' : 'pending'}">${card.adminVerified ? '✓ Active' : '⚠ Pending Verification'}</div>
     </div>
-
-    <div class="member-name">${card.name}</div>
-    <p class="meta">Card ID: <span>${card.cardUniqueId}</span></p>
-    <p class="meta">Member ID: <span>${card.memberId}</span></p>
-
-    <div class="info-grid">
-      <div><div class="section-title">DOB</div><div class="section-value" style="font-size:13px">${card.dob || 'N/A'}</div></div>
-      <div><div class="section-title">Age</div><div class="section-value" style="font-size:13px">${card.age || 'N/A'} yrs</div></div>
-      <div><div class="section-title">Gender</div><div class="section-value" style="font-size:13px">${card.gender === 'M' ? 'Male' : card.gender === 'F' ? 'Female' : 'Other'}</div></div>
-      <div><div class="section-title">Blood Group</div><div class="section-value" style="font-size:20px">${card.bloodGroup || 'N/A'}</div></div>
-      <div style="grid-column:span 2"><div class="section-title">Relation</div><div class="section-value" style="font-size:13px">${card.relation}</div></div>
-    </div>
-
-    <div class="grid">
+    <div class="member-row">
+      <div class="photo-box">
+        ${card.photoUrl ? `<img src="${card.photoUrl}" alt="${card.name}" />` : '<span style="font-size:28px;color:rgba(255,255,255,0.4)">👤</span>'}
+      </div>
       <div>
-        <div class="section-title">Plan</div>
-        <div class="section-value">${card.planName.toUpperCase()}</div>
-        <div class="section-title" style="margin-top:12px">Coverage</div>
-        <div class="section-value">${formattedCoverage}</div>
+        <div class="member-name">${card.name}</div>
+        <p class="meta">Card ID: <span>${card.cardUniqueId}</span></p>
+        <p class="meta">Member ID: <span>${card.memberId}</span></p>
+      </div>
+    </div>
+    <div class="info-grid">
+      <div><div class="label">DOB</div><div class="value" style="font-size:11px">${card.dob || 'N/A'}</div></div>
+      <div><div class="label">Age</div><div class="value">${card.age || 'N/A'} yrs</div></div>
+      <div><div class="label">Gender</div><div class="value">${card.gender === 'M' ? 'Male' : card.gender === 'F' ? 'Female' : 'Other'}</div></div>
+      <div><div class="label">Blood Group</div><div class="blood-value">${card.bloodGroup || '—'}</div></div>
+      <div><div class="label">Relation</div><div class="value">${card.relation}</div></div>
+    </div>
+    <div class="grid-2col">
+      <div class="plan-box">
+        <div class="label">Plan</div>
+        <div class="value" style="font-size:15px">${card.planName.toUpperCase()}</div>
+        <div class="label" style="margin-top:12px">Coverage</div>
+        <div class="value" style="font-size:15px">No Limit</div>
       </div>
       <div class="validity-box">
-        <div class="section-title">VALIDITY</div>
-        <div style="font-size:13px; margin-top:8px">From: <strong>${card.validFrom || 'N/A'}</strong></div>
-        <div style="font-size:13px; margin-top:4px">Till: <strong>${card.validTill || 'N/A'}</strong></div>
+        <div class="label">VALIDITY PERIOD</div>
+        <div style="font-size:12px; margin-top:8px">From: <strong>${card.validFrom || 'N/A'}</strong></div>
+        <div style="font-size:12px; margin-top:4px">Till: <strong>${card.validTill || 'N/A'}</strong></div>
       </div>
     </div>
-
-    <div class="support">
-      <span class="badge-24">24/7</span>
-      Emergency Helpline: <strong>${card.emergencyContact || '1800-XXX-XXXX'}</strong>
-      &nbsp;|&nbsp; support@healthmitra.com &nbsp;|&nbsp; www.healthmitra.com
-    </div>
-
     <p class="footer-note">This is a system-generated e-card issued by HealthMitra. Valid only with admin verification.</p>
   </div>
 </div>

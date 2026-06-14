@@ -107,7 +107,7 @@ export function Footer() {
                             <div className="flex items-start gap-2 text-sm text-muted-foreground">
                                 <MapPin size={16} className="mt-0.5 flex-shrink-0" />
                                 <span className="text-xs">
-                                    {getSetting('india_address', 'HealthMitra Systems AI Pvt Ltd, C/O JSS Academy of Technical Education, C-20/1, Sector 62, Noida, Uttar Pradesh 201309')}
+                                {getSetting('india_address', 'HealthMitra Systems Pvt Ltd, C/O JSS Academy of Technical Education, C-20/1, Sector 62, Noida, Uttar Pradesh 201309')}
                                 </span>
                             </div>
                         </div>

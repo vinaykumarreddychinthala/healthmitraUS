@@ -75,35 +75,38 @@ export default function PolicyHolderKYCModal({
         window.open(url, '_blank');
     };
 
-    const canProceedStep1 = holderFullName.trim().length >= 2 && relation !== '' && dob !== '' && gender !== '' && bloodGroup !== '';
-    const canProceedStep2 = (aadhaarDeclaration || (aadhaarNumber.replace(/\D/g, '').length === 12 && aadhaarFile)) 
-        && (panDeclaration || (panNumber.length === 10 && panFile));
+    // Blood group is optional; all other personal fields are required
+    const canProceedStep1 = holderFullName.trim().length >= 2 && relation !== '' && dob !== '' && gender !== '';
+    // Step 2: Aadhaar must be (12-digit number + file) OR declaration checked. PAN same rule.
+    const aadhaarValid = aadhaarDeclaration || (aadhaarNumber.replace(/\D/g, '').length === 12 && aadhaarFile !== null);
+    const panValid = panDeclaration || (panNumber.length === 10 && panFile !== null);
+    const canProceedStep2 = aadhaarValid && panValid;
     const canProceedStep3 = photo !== null;
 
     const handleNext = () => {
-        if (step === 1 && !canProceedStep1) { toast.error('Please fill in all personal details'); return; }
-        if (step === 2 && !canProceedStep2) {
-            if (!aadhaarDeclaration) {
+        if (step === 1 && !canProceedStep1) { toast.error('Please fill in Name, Relation, Date of Birth and Gender to continue'); return; }
+        if (step === 2) {
+            if (!aadhaarValid) {
                 if (aadhaarNumber.replace(/\D/g, '').length !== 12) {
-                    toast.error('Please enter a valid 12-digit Aadhaar number');
+                    toast.error('Please enter a valid 12-digit Aadhaar number or check the declaration');
                     return;
                 }
                 if (!aadhaarFile) {
-                    toast.error('Please upload your Aadhaar document');
+                    toast.error('Please upload your Aadhaar document or check the declaration');
                     return;
                 }
             }
-            if (!panDeclaration) {
+            if (!panValid) {
                 if (panNumber.length !== 10) {
-                    toast.error('Please enter a valid 10-character PAN number');
+                    toast.error('Please enter a valid 10-character PAN number or check the declaration');
                     return;
                 }
                 if (!panFile) {
-                    toast.error('Please upload your PAN document');
+                    toast.error('Please upload your PAN document or check the declaration');
                     return;
                 }
             }
-            return;
+            if (!canProceedStep2) return;
         }
         if (step === 3 && !canProceedStep3) { toast.error('Please upload your current photo'); return; }
         setStep(s => s + 1);
@@ -152,7 +155,7 @@ export default function PolicyHolderKYCModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="bg-white max-w-lg w-full p-0 overflow-hidden gap-0">
+            <DialogContent className="bg-white max-w-lg w-full p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-teal-600 to-cyan-600 px-6 py-5 text-white">
                     <DialogTitle className="text-xl font-bold text-white">Policy Holder Details</DialogTitle>
@@ -184,8 +187,8 @@ export default function PolicyHolderKYCModal({
                     ))}
                 </div>
 
-                {/* Step Content */}
-                <div className="px-6 py-5 space-y-5 min-h-[280px]">
+                {/* Step Content — scrollable */}
+                <div className="px-6 py-5 space-y-5 min-h-[280px] overflow-y-auto flex-1">
                     {/* Step 1: Personal Details */}
                     {step === 1 && (
                         <div className="space-y-4">
@@ -245,7 +248,7 @@ export default function PolicyHolderKYCModal({
                                 </div>
                                 <div className="space-y-2">
                                     <Label className="text-slate-700 font-medium">
-                                        Blood Group <span className="text-red-500">*</span>
+                                        Blood Group <span className="text-slate-400 font-normal text-xs">(optional)</span>
                                     </Label>
                                     <Select value={bloodGroup} onValueChange={setBloodGroup}>
                                         <SelectTrigger className="h-11">

@@ -159,7 +159,6 @@ export default function SupportClient({ initialTickets }: SupportClientProps) {
                 </button>
             </div>
 
-            {/* Quick Help Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center hover:shadow-md transition-shadow">
                     <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -167,7 +166,7 @@ export default function SupportClient({ initialTickets }: SupportClientProps) {
                     </div>
                     <h3 className="font-bold text-slate-800 mb-1">Call Us</h3>
                     <p className="text-slate-500 text-xs mb-2">Available 24/7</p>
-                    <a href="tel:+9118001234567" className="text-teal-600 font-bold hover:underline">1800-XXX-XXXX</a>
+                    <a href="tel:+919818823106" className="text-teal-600 font-bold hover:underline">+91 9818823106</a>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center hover:shadow-md transition-shadow">
@@ -176,7 +175,7 @@ export default function SupportClient({ initialTickets }: SupportClientProps) {
                     </div>
                     <h3 className="font-bold text-slate-800 mb-1">Email Us</h3>
                     <p className="text-slate-500 text-xs mb-2">Reply within 24hrs</p>
-                    <a href="mailto:support@healthmitra.com" className="text-blue-600 font-bold hover:underline text-sm">support@healthmitra.com</a>
+                    <a href="mailto:service@healthmitraus.com" className="text-blue-600 font-bold hover:underline text-sm">service@healthmitraus.com</a>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center hover:shadow-md transition-shadow">
@@ -185,9 +184,16 @@ export default function SupportClient({ initialTickets }: SupportClientProps) {
                     </div>
                     <h3 className="font-bold text-slate-800 mb-1">Live Chat</h3>
                     <p className="text-slate-500 text-xs mb-2">
-                        <span className="inline-block w-2 h-2 bg-emerald-500 rounded-full mr-1"></span>Online
+                        <span className="inline-block w-2 h-2 bg-emerald-500 rounded-full mr-1"></span>WhatsApp
                     </p>
-                    <button className="text-emerald-600 font-bold hover:underline" onClick={() => toast.info('Live chat connecting...', { description: 'A support agent will be with you shortly.' })}>Start Chat →</button>
+                    <a
+                        href="https://wa.me/919818823106"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-600 font-bold hover:underline"
+                    >
+                        Chat on WhatsApp →
+                    </a>
                 </div>
             </div>
 
@@ -370,11 +376,11 @@ export default function SupportClient({ initialTickets }: SupportClientProps) {
                                     <div className="space-y-3">
                                         <div>
                                             <p className="text-xs text-slate-500">24/7 Helpline</p>
-                                            <p className="font-bold text-slate-800">1800-XXX-XXXX (Toll Free)</p>
+                                            <a href="tel:+919818823106" className="font-bold text-slate-800 hover:text-teal-600 transition-colors">+91 9818823106</a>
                                         </div>
                                         <div>
                                             <p className="text-xs text-slate-500">WhatsApp Support</p>
-                                            <p className="font-bold text-slate-800">+91 98765 43210</p>
+                                            <a href="https://wa.me/919818823106" target="_blank" rel="noopener noreferrer" className="font-bold text-emerald-600 hover:underline">+91 9818823106</a>
                                         </div>
                                     </div>
                                 </div>
@@ -386,24 +392,40 @@ export default function SupportClient({ initialTickets }: SupportClientProps) {
                                     <div className="space-y-3">
                                         <div>
                                             <p className="text-xs text-slate-500">General Queries</p>
-                                            <p className="font-bold text-slate-800">support@healthmitra.com</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-slate-500">Claims & Reimbursements</p>
-                                            <p className="font-bold text-slate-800">claims@healthmitra.com</p>
+                                            <a href="mailto:service@healthmitraus.com" className="font-bold text-slate-800 hover:text-blue-600 transition-colors">service@healthmitraus.com</a>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="p-5 bg-teal-50 rounded-xl border border-teal-200">
-                                <h4 className="font-semibold text-teal-800 mb-2">Office Address</h4>
-                                <p className="text-sm text-teal-700">
-                                    HealthMitra Healthcare Pvt. Ltd.<br />
-                                    3rd Floor, Sunrise Business Park,<br />
-                                    SG Highway, Ahmedabad - 380015,<br />
-                                    Gujarat, India
-                                </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="p-5 bg-teal-50 rounded-xl border border-teal-200">
+                                    <h4 className="font-semibold text-teal-800 mb-3">🇺🇸 USA Office</h4>
+                                    <p className="text-sm text-teal-700">
+                                        1550 Sheridan Drive,<br />
+                                        Buffalo, NY 14217,<br />
+                                        United States
+                                    </p>
+                                </div>
+                                <div className="p-5 bg-teal-50 rounded-xl border border-teal-200">
+                                    <h4 className="font-semibold text-teal-800 mb-3">🇮🇳 India Office</h4>
+                                    <p className="text-sm text-teal-700">
+                                        HealthMitra Systems Pvt Ltd.<br />
+                                        C/O JSS Academy of Technical Education,<br />
+                                        C-20/1, Sector 62, Noida,<br />
+                                        Uttar Pradesh 201309
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
+                                <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                                    <Clock size={16} className="text-slate-500" /> Business Hours
+                                </h4>
+                                <div className="text-sm text-slate-700 space-y-1">
+                                    <p><span className="font-medium">Monday – Saturday:</span> 9 AM – 8 PM</p>
+                                    <p><span className="font-medium">Sunday:</span> 10 AM – 6 PM</p>
+                                </div>
                             </div>
                         </div>
                     )}

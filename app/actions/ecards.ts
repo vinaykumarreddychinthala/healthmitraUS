@@ -10,45 +10,73 @@ export async function getECards() {
 
     if (!user) return { success: false, error: 'Not authenticated' };
 
-    // Use admin client to bypass RLS
+    // Use admin client to bypass RLS — includes member_id_code
     let { data, error } = await adminClient.from('ecard_members')
-        .select('*, plans(name, price, coverage_amount, features), policy_holder_kyc(admin_verified, kyc_submitted)')
+        .select('*, plans(name, price, coverage_amount, features), policy_holder_kyc(admin_verified, kyc_submitted, photo_url)')
         .eq('user_id', user.id);
 
     // Fallback to regular client if admin fails
     if (error) {
         ({ data, error } = await supabase.from('ecard_members')
-            .select('*, plans(name, price, coverage_amount, features), policy_holder_kyc(admin_verified, kyc_submitted)')
+            .select('*, plans(name, price, coverage_amount, features), policy_holder_kyc(admin_verified, kyc_submitted, photo_url)')
             .eq('user_id', user.id));
     }
 
     if (error) return { success: false, error: error.message };
 
+    // Fetch policy_id from customers (one per plan purchase, keyed by plan_id)
+    const { data: customerRows } = await adminClient
+        .from('customers')
+        .select('plan_id, policy_id')
+        .eq('user_id', user.id);
+
+    // Build lookup: plan_id → policy_id (first found wins)
+    const policyIdMap = new Map<string, string>();
+    if (customerRows) {
+        for (const c of customerRows) {
+            if (c.plan_id && c.policy_id && !policyIdMap.has(c.plan_id)) {
+                policyIdMap.set(c.plan_id, c.policy_id);
+            }
+        }
+    }
+
     // Format for View
-    const cards = (data || []).map((m: any) => ({
-        id: m.id,
-        user_id: m.user_id,
-        plan_id: m.plan_id,
-        card_number: m.card_unique_id || 'PENDING',
-        member_name: m.full_name,
-        relation: m.relation,
-        dob: m.dob,
-        gender: m.gender,
-        valid_from: m.valid_from,
-        valid_till: m.valid_till,
-        status: m.status,
-        plan_name: m.plans?.name || 'Health Plan',
-        plan_price: m.plans?.price || 0,
-        plan_features: m.plans?.features || [],
-        coverage_amount: m.plans?.coverage_amount || m.coverage_amount || 0,
-        emergency_contact: m.contact_number || null,
-        adminVerified: Array.isArray(m.policy_holder_kyc) 
-            ? m.policy_holder_kyc[0]?.admin_verified || false 
-            : m.policy_holder_kyc?.admin_verified || false,
-        kycSubmitted: Array.isArray(m.policy_holder_kyc)
-            ? m.policy_holder_kyc[0]?.kyc_submitted || false
-            : m.policy_holder_kyc?.kyc_submitted || false
-    }));
+    const cards = (data || []).map((m: any) => {
+        const kyc = Array.isArray(m.policy_holder_kyc) ? m.policy_holder_kyc[0] : m.policy_holder_kyc;
+
+        // Format dates: DB stores YYYY-MM-DD, display as DD-MMM-YYYY
+        const fmtDate = (d: string | null | undefined) => {
+            if (!d) return 'N/A';
+            const dt = new Date(d);
+            if (isNaN(dt.getTime())) return d;
+            return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        };
+
+        return {
+            id: m.id,
+            user_id: m.user_id,
+            plan_id: m.plan_id,
+            card_number: m.card_unique_id || 'PENDING',
+            member_id: m.member_id_code || null,
+            member_name: m.full_name,
+            relation: m.relation,
+            dob: m.dob ? fmtDate(m.dob) : 'N/A',
+            gender: m.gender,
+            blood_group: m.blood_group || '',
+            valid_from: fmtDate(m.valid_from),
+            valid_till: fmtDate(m.valid_till),
+            status: m.status,
+            plan_name: m.plans?.name || 'Health Plan',
+            plan_price: m.plans?.price || 0,
+            plan_features: m.plans?.features || [],
+            coverage_amount: m.plans?.coverage_amount || m.coverage_amount || 0,
+            emergency_contact: m.contact_number || null,
+            photo_url: kyc?.photo_url || null,
+            adminVerified: kyc?.admin_verified || false,
+            kycSubmitted: kyc?.kyc_submitted || false,
+            policy_id: policyIdMap.get(m.plan_id) || null,
+        };
+    });
 
     return { success: true, data: cards };
 }
@@ -105,14 +133,13 @@ export async function getMyPurchases() {
         // Determine status based on valid_till
         const isExpired = m.valid_till && new Date(m.valid_till) < new Date();
         const status = isExpired ? 'expired' : (m.status === 'active' ? 'active' : m.status);
-        
+
         // Get plan name - prefer plans table, fallback to other fields
         let planName = m.plans?.name;
         if (!planName) {
-            // Try to get from related data or use default
             planName = 'Health Plan';
         }
-        
+
         return {
             id: m.id, // Use member ID as the purchase ID
             plan_id: m.plans?.id || m.plan_id,
@@ -128,13 +155,14 @@ export async function getMyPurchases() {
             relation: m.relation,
             card_number: m.card_unique_id,
             max_members: m.plans?.member_count_max ?? 1,
-            isFirstPurchase: m.relation === 'Self'
+            isFirstPurchase: m.relation === 'Self',
+            plan_features: Array.isArray(m.plans?.features) ? m.plans.features : [],
         };
     });
 
     // Group by card_unique_id to combine family members under same purchase
     const groupedMap = new Map<string, any>();
-    
+
     for (const p of purchases) {
         const key = p.card_number || p.id;
         if (!groupedMap.has(key)) {
@@ -152,7 +180,7 @@ export async function getMyPurchases() {
     }
 
     const groupedPurchases = Array.from(groupedMap.values());
-    
+
     // Add members_count to each purchase
     for (const p of groupedPurchases) {
         p.members_count = data.filter((d: any) => (d.card_unique_id || d.id) === (p.card_number || p.id)).length;

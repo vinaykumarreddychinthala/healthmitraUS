@@ -19,7 +19,7 @@ export function InvoicesView({ invoices }: InvoicesViewProps) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    type: type === 'invoice' ? 'invoice' : 'reimbursement_receipt',
+                    type: type,
                     data: { purchaseId: invoiceId }
                 }),
             });
@@ -27,29 +27,19 @@ export function InvoicesView({ invoices }: InvoicesViewProps) {
             const result = await response.json();
 
             if (result.success) {
-                if (result.data.type === 'html') {
-                    // Open HTML in new window for printing/saving as PDF
-                    const printWindow = window.open('', '_blank');
-                    if (printWindow) {
-                        printWindow.document.write(result.data.content);
-                        printWindow.document.close();
-                        toast.success('Invoice opened - use Print > Save as PDF');
-                    } else {
-                        toast.error('Please allow popups to download invoice');
-                    }
-                } else {
-                    // Legacy text download
-                    const blob = new Blob([result.data.content], { type: 'text/plain' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = result.data.filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    a.remove();
-                    toast.success('Download started');
-                }
+                // Download the file
+                const blob = new Blob([result.data.content], { 
+                    type: result.data.type === 'html' ? 'text/html' : 'text/plain' 
+                });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = result.data.filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                toast.success('Download started');
             } else {
                 toast.error(result.error || 'Download failed');
             }

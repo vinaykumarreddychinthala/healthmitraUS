@@ -4,6 +4,19 @@ import { validatePromoCode } from '@/app/actions/coupons';
 import { sendMail } from '@/lib/email';
 import crypto from 'crypto';
 
+/** Generate a unique Member ID: MEM-XXXXX (5 random digits) */
+function generateMemberId(): string {
+    const digits = Math.floor(10000 + Math.random() * 90000); // always 5 digits
+    return `MEM-${digits}`;
+}
+
+/** Generate a unique Policy ID: POL-XXXXXXX (7 random digits) */
+function generatePolicyId(): string {
+    const digits = Math.floor(1000000 + Math.random() * 9000000); // always 7 digits
+    return `POL-${digits}`;
+}
+
+
 const paymentReceiptTemplate = ({
   name,
   planName,
@@ -33,14 +46,15 @@ const welcomeTemplate = ({
   password,
   planName,
   amount,
-  transactionId
+  transactionId,
+  planUrl
 }: any) => `
 <div style="font-family:sans-serif;max-width:600px;margin:auto;">
   <p>Dear ${name},</p>
 
   <p>Thank you for choosing <strong>HealthMitra</strong>.</p>
 
-  <p>You have successfully purchased <strong>${planName}</strong>.</p>
+  <p>You have successfully purchased <strong>${planName}</strong>${planUrl ? ` — <a href="${planUrl}">View Plan Details</a>` : ''}.</p>
 
   <p><strong>Transaction ID:</strong> ${transactionId}</p>
   <p><strong>Amount:</strong> $${amount}</p>
@@ -180,6 +194,8 @@ export async function POST(request: Request) {
             generatedUserId = `HM${Date.now()}${crypto.randomUUID().replace(/-/g,'').slice(0,6).toUpperCase()}`;
         }
 
+        const policyId = generatePolicyId();
+
         const { data: member, error: memberError } = await adminClient
             .from('ecard_members')
             .insert({
@@ -192,6 +208,7 @@ export async function POST(request: Request) {
                 valid_till: expiryDate.toISOString().split('T')[0],
                 coverage_amount: plan.coverage_amount || plan.price * 100,
                 card_unique_id: generatedUserId,
+                member_id_code: generateMemberId(),
             })
             .select().single();
 
@@ -216,6 +233,7 @@ export async function POST(request: Request) {
                     valid_till: expiryDate.toISOString().split('T')[0],
                     coverage_amount: plan.coverage_amount || plan.price * 100,
                     card_unique_id: familyCardId,
+                    member_id_code: generateMemberId(),
                 });
             }
             const { error: familyError } = await adminClient.from('ecard_members').insert(familyMembersToInsert);
@@ -223,6 +241,26 @@ export async function POST(request: Request) {
                 console.error('PayPal checkout family members pre-population error:', familyError);
             }
         }
+
+        // -----------------------------------------------------------------------
+        // Insert into `customers` table (plan buyer record)
+        // -----------------------------------------------------------------------
+        await adminClient.from('customers').insert({
+            user_id: user.id,
+            email: user.email!,
+            full_name: user.email?.split('@')[0] || 'User',
+            plan_id: planId,
+            plan_name: plan.name,
+            card_unique_id: generatedUserId,
+            policy_id: policyId,
+            amount_paid: finalAmount,
+            currency: 'USD',
+            payment_method: 'paypal',
+            transaction_id: captureId || paypalOrderId,
+            valid_from: startDate.toISOString().split('T')[0],
+            valid_till: expiryDate.toISOString().split('T')[0],
+            status: 'active',
+        });
 
         // Create payment record — use admin client
         await adminClient.from('payments').insert({
@@ -268,6 +306,12 @@ export async function POST(request: Request) {
                 })
             });
 
+            // Construct plan details page URL
+            const host = request.headers.get('host') || 'healthmitra.co.in';
+            const protocol = request.headers.get('x-forwarded-proto') || 'https';
+            const domain = `${protocol}://${host}`;
+            const planUrl = plan.slug ? `${domain}/plans/${plan.slug}` : `${domain}/plans`;
+
             // 2️⃣ Welcome Email
             await sendMail({
                 to: user.email,
@@ -275,11 +319,12 @@ export async function POST(request: Request) {
                 html: welcomeTemplate({
                     name,
                     email: user.email,
-                    userId: isFirstTimeUser ? generatedUserId : null,
+                    userId: isFirstTimeUser ? user.email : null,
                     password: isFirstTimeUser ? generatedPassword : null,
                     planName: plan.name,
                     amount: finalAmount,
-                    transactionId: captureId || paypalOrderId
+                    transactionId: captureId || paypalOrderId,
+                    planUrl
                 })
             });
         }

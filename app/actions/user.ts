@@ -43,7 +43,7 @@ export async function updateUserProfile(formData: Record<string, any>) {
         email_service_updates, email_reimbursement, email_wallet,
         email_renewal, email_promo, email_newsletter,
         sms_critical, sms_wallet, sms_appointments, sms_promo,
-        language, theme,
+        language, theme, two_factor_enabled,
         email, // Don't update email from profile form
         ...profileFields
     } = formData;

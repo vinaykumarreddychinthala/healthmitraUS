@@ -2,7 +2,11 @@
 
 import React, { useState, useRef } from 'react';
 import { ECardMember } from '@/types/ecard';
-import { Download, Share2, Wallet, RefreshCw, Smartphone, Mail, Clock, Shield, Phone, Globe, ChevronRight, QrCode, CheckCircle, ShieldAlert, Loader2, User, Lock } from 'lucide-react';
+import {
+    Download, Share2, Wallet, RefreshCw, Smartphone, Mail, Clock,
+    Shield, Phone, Globe, ChevronRight, CheckCircle,
+    ShieldAlert, Loader2, User, Lock
+} from 'lucide-react';
 import EmailECardModal from './EmailECardModal';
 import { downloadCardAsImage, downloadCardAsPDF } from '@/lib/cardDrawer';
 import { toast } from 'sonner';
@@ -17,7 +21,6 @@ interface ECardFlipProps {
 export default function ECardFlip({ card, kycStatus, onDownloadClick, onCompleteKycClick }: ECardFlipProps) {
     const [isFlipped, setIsFlipped] = useState(false);
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
-    const frontCardRef = useRef<HTMLDivElement>(null);
 
     const handleActualDownload = async (type: 'download-pdf' | 'download-img') => {
         const toastId = toast.loading(`Preparing ${type === 'download-pdf' ? 'PDF' : 'image'}...`);
@@ -35,9 +38,10 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick, onComplete
                 coverageAmount: card.coverageAmount ?? 0,
                 validFrom: card.validFrom,
                 validTill: card.validTill,
-                emergencyContact: card.emergencyContact || '1800-XXX-XXXX',
+                emergencyContact: card.emergencyContact || '9818823106',
                 adminVerified: card.adminVerified ?? false,
                 photoUrl: card.photoUrl,
+                planFeatures: card.planFeatures,
             };
             const filename = `HealthMitra_Card_${card.name.replace(/\s+/g, '_')}`;
             if (type === 'download-img') {
@@ -53,7 +57,7 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick, onComplete
         }
     };
 
-    // If card is pending, show pending state
+    // Pending state
     if (card.status === 'pending') {
         return (
             <div className="w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
@@ -67,330 +71,293 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick, onComplete
                             Please complete member details and submit KYC documents to generate this E-Card
                         </p>
                     </div>
-
                     <div className="w-full bg-slate-50 p-4 rounded-xl mt-2 border border-slate-100">
                         <div className="text-sm text-left space-y-1">
                             <p><span className="text-slate-500">Member:</span> <span className="font-semibold text-slate-700">{card.name || 'Unassigned'} ({card.relation})</span></p>
                             <p><span className="text-slate-500">Plan:</span> <span className="font-semibold text-slate-700">{card.planName}</span></p>
                         </div>
                     </div>
-
                     <button
                         onClick={(e) => { e.stopPropagation(); onCompleteKycClick?.(); }}
                         className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2.5 rounded-xl font-semibold text-sm transition-colors mt-2"
                     >
-                        Complete KYC & Activate Card
+                        Complete KYC &amp; Activate Card
                     </button>
                 </div>
             </div>
         );
     }
 
-    // Calculate coverage display
-    const coverageAmount = card.coverageAmount ?? 0;
-    const formattedCoverage = coverageAmount > 0 ? `$${(coverageAmount / 100000).toFixed(0)},00,000` : '$0';
+    const defaultBenefits = [
+        'Cashless Hospitalization at 1000+ hospitals',
+        'OPD Coverage – Unlimited as per Plan',
+        'Unlimited Diagnostic Tests – 30% to 50% discount',
+        'Medicine Home Delivery on 30% discount',
+        'Free Annual Health Checkup (1 per member)',
+        'Unlimited Telemedicine Consultations',
+        'Emergency Ambulance Service',
+    ];
+
+    const benefits = (card.planFeatures && card.planFeatures.length > 0) ? card.planFeatures : defaultBenefits;
 
     return (
         <div className="w-full perspective-1000 group">
-            {/* Container for flip effect */}
+            {/* Flip Container */}
             <div
-                className={`relative w-full transition-all duration-500 transform-style-3d cursor-pointer ${isFlipped ? 'rotate-y-180' : ''}`}
-                onClick={(e) => {
-                    // Only flip to back if it's currently on the front
-                    if (!isFlipped) setIsFlipped(true);
-                }}
+                className={`relative w-full transition-all duration-700 transform-style-3d cursor-pointer select-none ${isFlipped ? 'rotate-y-180' : ''}`}
+                style={{ minHeight: '340px' }}
+                onClick={() => { if (!isFlipped) setIsFlipped(true); }}
             >
 
                 {/* ==================== FRONT SIDE ==================== */}
                 <div className="w-full backface-hidden">
-                    <div ref={frontCardRef} className="w-full min-h-[350px] bg-gradient-to-br from-teal-500 via-teal-600 to-cyan-700 rounded-2xl shadow-2xl p-6 text-white flex flex-col relative overflow-hidden">
+                    <div className="w-full bg-gradient-to-br from-teal-700 via-teal-600 to-cyan-600 rounded-2xl shadow-2xl p-5 text-white flex flex-col relative overflow-hidden" style={{ minHeight: '330px' }}>
 
-                        {/* Background Pattern */}
-                        <div className="absolute top-0 right-0 w-72 h-72 bg-white opacity-5 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl"></div>
-                        <div className="absolute bottom-0 left-0 w-56 h-56 bg-black opacity-10 rounded-full translate-y-1/3 -translate-x-1/3 blur-2xl"></div>
-                        <div className="absolute top-1/2 right-0 w-32 h-32 bg-cyan-400 opacity-10 rounded-full blur-2xl"></div>
+                        {/* Subtle Background Patterns */}
+                        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white/5 -translate-y-1/3 translate-x-1/4 pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full bg-black/10 translate-y-1/3 -translate-x-1/4 pointer-events-none" />
+                        <div className="absolute top-1/2 left-1/3 w-32 h-32 rounded-full bg-cyan-400/10 pointer-events-none" />
 
-                        {/* Header */}
-                        <div className="flex justify-between items-start z-10 shrink-0">
+                        {/* ── HEADER ROW ── */}
+                        <div className="flex justify-between items-center z-10 shrink-0">
                             <div>
-                                <h3 className="font-bold text-xl tracking-wide">HEALTHMITRA</h3>
-                                <p className="text-xs text-teal-100 opacity-90 mt-0.5">Your Health, Our Priority</p>
+                                <p className="font-black text-base tracking-widest uppercase">HEALTHMITRA</p>
+                                <p className="text-[10px] text-teal-200 mt-0.5 tracking-wide">Your Health, Our Priority</p>
                             </div>
-                            {card.adminVerified ? (
-                                <span className="text-xs font-bold px-3 py-1.5 bg-green-400 text-green-900 rounded-full shadow-lg flex items-center gap-1">
-                                    <CheckCircle size={12} /> Active
-                                </span>
-                            ) : (
-                                <span className="text-xs font-bold px-3 py-1.5 bg-orange-400 text-orange-900 rounded-full shadow-lg flex items-center gap-1">
-                                    <ShieldAlert size={12} /> Verification Pending
-                                </span>
-                            )}
+                            <div className="flex flex-col items-end gap-1">
+                                {card.adminVerified ? (
+                                    <span className="text-[10px] font-bold px-2.5 py-1 bg-emerald-400 text-emerald-900 rounded-full flex items-center gap-1 shadow">
+                                        <CheckCircle size={10} /> Active
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] font-bold px-2.5 py-1 bg-amber-400 text-amber-900 rounded-full flex items-center gap-1 shadow">
+                                        <ShieldAlert size={10} /> Pending
+                                    </span>
+                                )}
+                            </div>
                         </div>
 
-                        <div className="flex-1 flex flex-col sm:flex-row mt-6 gap-6 z-10 min-h-0">
-                            {/* Left Column (Member info) */}
-                            <div className="flex-1 flex flex-col justify-between">
-                                {/* Member Details */}
-                                <div className="flex gap-4">
-                                    <div className="w-16 h-20 bg-white/20 rounded-xl flex-shrink-0 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-lg">
-                                        {card.photoUrl ? (
-                                            <img src={card.photoUrl} alt={card.name} className="w-full h-full object-cover rounded-xl" />
-                                        ) : (
-                                            <User size={32} className="text-white/50" />
-                                        )}
-                                    </div>
-                                    <div className="flex-1">
-                                        <h4 className="font-bold text-xl uppercase tracking-wide">{card.name}</h4>
-
-                                        <div className="mt-2 space-y-1 text-xs">
-                                            <p className="text-teal-100">
-                                                <span className="text-teal-200">Card ID:</span>{' '}
-                                                <span className="font-mono font-bold text-white">{card.cardUniqueId}</span>
-                                                <span className="ml-1 text-[9px] bg-white/20 px-1.5 py-0.5 rounded">(Unique)</span>
-                                            </p>
-                                            <p className="text-teal-100">
-                                                <span className="text-teal-200">Member ID:</span>{' '}
-                                                <span className="font-mono text-white">{card.memberId}</span>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* Member Info Grid */}
-                                <div className="mt-4 p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10">
-                                    <div className="grid grid-cols-3 gap-2 text-xs">
-                                        <div>
-                                            <p className="text-teal-200 text-[10px]">DOB</p>
-                                            <p className="font-semibold">{card.dob}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-teal-200 text-[10px]">Age</p>
-                                            <p className="font-semibold">{card.age} yrs</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-teal-200 text-[10px]">Gender</p>
-                                            <p className="font-semibold">{card.gender === 'M' ? 'M' : card.gender === 'F' ? 'F' : 'O'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-teal-200 text-[10px]">Blood Group</p>
-                                            <p className="font-bold text-lg -mt-0.5">{card.bloodGroup}</p>
-                                        </div>
-                                        <div className="col-span-2">
-                                            <p className="text-teal-200 text-[10px]">Relation</p>
-                                            <p className="font-semibold">{card.relation}</p>
-                                        </div>
-                                    </div>
-                                </div>
+                        {/* ── MEMBER SECTION ── */}
+                        <div className="flex gap-4 mt-4 z-10">
+                            {/* Photo */}
+                            <div className="w-[68px] h-[82px] rounded-xl flex-shrink-0 border-2 border-white/30 overflow-hidden bg-white/15 backdrop-blur-sm shadow-lg flex items-center justify-center">
+                                {card.photoUrl ? (
+                                    <img src={card.photoUrl} alt={card.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    <User size={28} className="text-white/50" />
+                                )}
                             </div>
 
-                            {/* Right Column (Plan, Validity, QR) */}
-                            <div className="w-full sm:w-[240px] flex flex-col justify-between border-t sm:border-t-0 sm:border-l border-white/20 pt-4 sm:pt-0 sm:pl-6 shrink-0">
-                                {/* Plan & Coverage */}
+                            {/* Name + IDs */}
+                            <div className="flex-1 min-w-0">
+                                <h4 className="font-black text-lg uppercase tracking-wider leading-tight truncate">{card.name}</h4>
+                                <p className="text-teal-200 text-[10px] mt-1">{card.relation}</p>
+                                <div className="mt-2 space-y-0.5 text-[10px]">
+                                    <p className="text-teal-100">
+                                        <span className="text-teal-300">Card No.: </span>
+                                        <span className="font-mono font-bold">{card.cardUniqueId}</span>
+                                    </p>
+                                    <p className="text-teal-100">
+                                        <span className="text-teal-300">Member ID: </span>
+                                        <span className="font-mono">{card.memberId || '—'}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── INFO GRID ── */}
+                        <div className="mt-3 z-10 p-3 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
+                            <div className="grid grid-cols-5 gap-x-2 gap-y-1 text-[10px]">
                                 <div>
-                                    <p className="text-[10px] text-teal-200 uppercase tracking-wide">Plan</p>
-                                    <p className="text-sm font-bold">{card.planName.toUpperCase()}</p>
-                                    <p className="text-[10px] text-teal-200 uppercase tracking-wide mt-2">Coverage</p>
-                                    <p className="text-sm font-bold">{formattedCoverage}</p>
+                                    <p className="text-teal-300 uppercase text-[9px]">DOB</p>
+                                    <p className="font-semibold text-white">{card.dob || 'N/A'}</p>
                                 </div>
-                                {/* Validity Section */}
-                                <div className="mt-4 p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/10">
-                                    <p className="text-[10px] text-teal-200 uppercase tracking-wider font-semibold mb-1">VALIDITY</p>
-                                    <div className="text-xs space-y-1">
-                                        <div>
-                                            <span className="text-teal-100">From:</span>{' '}
-                                            <span className="font-bold text-white">{card.validFrom}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-teal-100">Till:</span>{' '}
-                                            <span className="font-bold text-white">{card.validTill}</span>
-                                        </div>
-                                    </div>
+                                <div>
+                                    <p className="text-teal-300 uppercase text-[9px]">Age</p>
+                                    <p className="font-semibold text-white">{card.age ? `${card.age} yrs` : 'N/A'}</p>
                                 </div>
-                                {/* Footer - 24/7 Support & QR */}
-                                <div className="mt-4 flex justify-between items-end">
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1 bg-yellow-400 text-yellow-900 px-2 py-1 rounded text-[10px] font-bold shadow-lg">
-                                            <Clock size={10} />
-                                            24/7
-                                        </div>
-                                        <div className="text-xs">
-                                            <p className="text-teal-200 text-[9px]">Support</p>
-                                            <p className="font-bold">{card.emergencyContact || '1800-XXX-XXXX'}</p>
-                                        </div>
+                                <div>
+                                    <p className="text-teal-300 uppercase text-[9px]">Gender</p>
+                                    <p className="font-semibold text-white">{card.gender === 'M' ? 'Male' : card.gender === 'F' ? 'Female' : card.gender || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-teal-300 uppercase text-[9px]">Blood Grp</p>
+                                    <p className="font-black text-base text-red-300 leading-tight">{card.bloodGroup || '—'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-teal-300 uppercase text-[9px]">Relation</p>
+                                    <p className="font-semibold text-white">{card.relation}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── PLAN + VALIDITY + COVERAGE ── */}
+                        <div className="mt-3 z-10 grid grid-cols-3 gap-3">
+                            <div className="col-span-1">
+                                <p className="text-teal-300 text-[9px] uppercase tracking-wide">Plan</p>
+                                <p className="text-xs font-bold text-white leading-tight mt-0.5">{card.planName.toUpperCase()}</p>
+                                <p className="text-teal-300 text-[9px] uppercase tracking-wide mt-2">Coverage</p>
+                                <p className="text-xs font-bold text-white mt-0.5">No Limit</p>
+                            </div>
+                            <div className="col-span-2 bg-white/10 border border-white/10 rounded-xl p-2.5">
+                                <p className="text-teal-300 text-[9px] uppercase tracking-wider font-semibold mb-1.5">Validity Period</p>
+                                <div className="text-[10px] space-y-1">
+                                    <div className="flex justify-between">
+                                        <span className="text-teal-200">From</span>
+                                        <span className="font-bold text-white">{card.validFrom}</span>
                                     </div>
-                                    <div className="bg-white p-1 rounded-md shadow-lg">
-                                        <div className="w-10 h-10 bg-gradient-to-br from-slate-800 to-slate-900 rounded-sm flex items-center justify-center">
-                                            <QrCode size={20} className="text-white" />
-                                        </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-teal-200">Till</span>
+                                        <span className="font-bold text-white">{card.validTill}</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Tap to Flip Indicator */}
-                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 hidden sm:block">
-                            <p className="text-[10px] text-white/60 flex items-center gap-1 animate-pulse">
-                                Tap to flip <ChevronRight size={10} />
-                            </p>
+                        {/* ── FOOTER ── */}
+                        <div className="mt-3 z-10">
+                            <p className="text-[9px] text-white/40 italic">This card is digitally generated by HealthMitra</p>
+                        </div>
+
+                        {/* Tap hint */}
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 hidden sm:block pointer-events-none">
+                            <p className="text-[9px] text-white/40 flex items-center gap-0.5 animate-pulse">Tap to see benefits <ChevronRight size={9} /></p>
                         </div>
                     </div>
                 </div>
 
                 {/* ==================== BACK SIDE ==================== */}
                 <div className="absolute top-0 left-0 w-full h-full backface-hidden rotate-y-180">
-                    <div className="w-full h-full bg-white rounded-2xl shadow-2xl p-6 border border-slate-200 flex flex-col relative overflow-hidden text-slate-800">
+                    <div className="w-full h-full bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col relative overflow-hidden text-slate-800">
 
                         {/* Header */}
-                        <div className="flex justify-between items-start border-b border-slate-100 pb-3 mb-4 shrink-0">
+                        <div className="flex justify-between items-center border-b border-slate-100 px-5 py-3 bg-gradient-to-r from-slate-50 to-teal-50 shrink-0">
                             <div>
-                                <h3 className="font-bold text-lg text-slate-800 uppercase tracking-wide">Plan Benefits & Contacts</h3>
+                                <p className="font-bold text-sm text-slate-800 tracking-wide">HEALTHMITRA</p>
+                                <p className="text-[9px] text-slate-400">Plan Benefits &amp; Contacts</p>
                             </div>
                             <button
                                 onClick={(e) => { e.stopPropagation(); setIsFlipped(false); }}
-                                className="text-xs font-medium text-teal-600 hover:text-teal-700 flex items-center gap-1 px-3 py-1.5 bg-teal-50 rounded-lg border border-teal-200 transition-colors"
+                                className="text-[10px] font-medium text-teal-600 hover:text-teal-700 flex items-center gap-1 px-2.5 py-1.5 bg-teal-50 rounded-lg border border-teal-200 transition-colors"
                             >
-                                ← Flip Back
+                                ← Front
                             </button>
                         </div>
 
-                        <div className="flex-1 flex flex-col sm:flex-row gap-6 min-h-0">
-                            {/* Left Column: Key Benefits */}
-                            <div className="flex-1 flex flex-col min-h-0">
-                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 shrink-0">KEY BENEFITS:</p>
-                                <div className="flex-1 overflow-y-auto min-h-0 pr-2">
-                                    <ul className="space-y-1.5 text-sm text-slate-600">
-                                        {(card.planFeatures && card.planFeatures.length > 0) ? card.planFeatures.map((benefit, idx) => (
-                                            <li key={idx} className="flex gap-2 items-start">
-                                                <span className="text-green-500 font-bold flex-shrink-0">✓</span>
-                                                <span>{benefit}</span>
-                                            </li>
-                                        )) : [
-                                            'Cashless hospitalization at 1000+ hospitals',
-                                            'OPD coverage up to $25,000/year',
-                                            'Diagnostic tests up to $15,000/year',
-                                            'Medicine reimbursement up to $20,000/year',
-                                            'Free annual health checkup (1 per member)',
-                                            'Unlimited telemedicine consultations',
-                                            'Emergency ambulance service',
-                                            '24/7 medical assistance hotline'
-                                        ].map((benefit, idx) => (
-                                            <li key={idx} className="flex gap-2 items-start">
-                                                <span className="text-green-500 font-bold flex-shrink-0">✓</span>
-                                                <span>{benefit}</span>
+                        <div className="flex-1 flex flex-col sm:flex-row min-h-0 overflow-hidden">
+                            {/* Left: Benefits */}
+                            <div className="flex-1 flex flex-col min-h-0 p-4">
+                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2 shrink-0">KEY BENEFITS</p>
+                                <div className="flex-1 overflow-y-auto min-h-0 pr-1 custom-scroll">
+                                    <ul className="space-y-2">
+                                        {benefits.map((benefit, idx) => (
+                                            <li key={idx} className="flex gap-2 items-start text-xs text-slate-700">
+                                                <span className="text-emerald-500 font-bold flex-shrink-0 mt-0.5">✓</span>
+                                                <span className="leading-snug">{benefit}</span>
                                             </li>
                                         ))}
                                     </ul>
                                 </div>
                             </div>
 
-                            {/* Right Column: Plan details, Emergency Contacts, Footer */}
-                            <div className="w-full sm:w-[260px] shrink-0 flex flex-col border-t sm:border-t-0 sm:border-l border-slate-100 pt-4 sm:pt-0 sm:pl-6">
-                                {/* Plan Name & Premium */}
-                                <div className="bg-gradient-to-r from-teal-50 to-emerald-50 p-4 rounded-xl border border-teal-100 mb-6 shrink-0">
-                                    <p className="font-bold text-teal-800 text-lg">{card.planName}</p>
-                                    <p className="text-sm text-teal-600 mt-1">Annual Premium: <span className="font-bold">${card.planPrice ? card.planPrice.toLocaleString('en-IN') : 'N/A'}</span></p>
-                                </div>
-
-                                {/* Emergency Contacts */}
-                                <div className="shrink-0">
-                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">EMERGENCY CONTACTS:</p>
-                                    <div className="space-y-2 text-sm text-slate-700">
-                                        <p className="flex items-center gap-2">
-                                            <Phone size={14} className="text-teal-500" />
-                                            <span>Helpline:</span>
-                                            <span className="font-bold">{card.emergencyContact || '1800-XXX-XXXX'}</span>
-                                        </p>
-                                        <p className="flex items-center gap-2">
-                                            <Mail size={14} className="text-teal-500" />
-                                            <span className="truncate">support@healthmitra.com</span>
-                                        </p>
-                                        <p className="flex items-center gap-2">
-                                            <Globe size={14} className="text-teal-500" />
-                                            <span className="truncate">www.healthmitra.com</span>
-                                        </p>
+                            {/* Right: Plan + Support */}
+                            <div className="w-full sm:w-[220px] shrink-0 flex flex-col border-t sm:border-t-0 sm:border-l border-slate-100 p-4 bg-slate-50/50">
+                                {/* Plan Info */}
+                                <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl p-3 text-white mb-3">
+                                    <p className="text-[9px] text-teal-100 uppercase tracking-wide mb-0.5">Active Plan</p>
+                                    <p className="font-bold text-sm leading-tight">{card.planName}</p>
+                                    <p className="text-[9px] text-teal-100 mt-1">Coverage: <span className="font-bold text-white">No Limit</span></p>
+                                    <div className="mt-2 pt-2 border-t border-white/20 text-[9px] text-teal-100">
+                                        <p>Valid: <span className="text-white font-semibold">{card.validFrom}</span></p>
+                                        <p>Expires: <span className="text-white font-semibold">{card.validTill}</span></p>
                                     </div>
                                 </div>
 
-                                {/* Footer Info */}
-                                <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-2 text-xs text-slate-500 shrink-0">
-                                    <div>
-                                        <p>Policy No: <span className="text-slate-700 font-medium">{card.policyNo}</span></p>
-                                        <p className="mt-0.5">Issued By: <span className="text-slate-700 font-medium">HealthMitra</span></p>
+                                {/* Support Contacts */}
+                                <div>
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">SUPPORT</p>
+                                    <div className="space-y-2 text-xs">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-lg bg-teal-50 flex items-center justify-center shrink-0">
+                                                <Phone size={11} className="text-teal-600" />
+                                            </div>
+                                            <span className="text-slate-700 font-semibold">9818823106</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-lg bg-teal-50 flex items-center justify-center shrink-0">
+                                                <Mail size={11} className="text-teal-600" />
+                                            </div>
+                                            <span className="text-slate-600 text-[10px] break-all">service@healthmitraus.com</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-lg bg-teal-50 flex items-center justify-center shrink-0">
+                                                <Globe size={11} className="text-teal-600" />
+                                            </div>
+                                            <span className="text-slate-600 text-[10px]">www.healthmitraus.com</span>
+                                        </div>
                                     </div>
-                                    {card.adminVerified ? (
-                                        <div className="flex items-center gap-1 text-teal-600 self-start bg-teal-50 px-2 py-1 rounded-lg">
-                                            <Shield size={14} />
-                                            <span className="font-semibold">Verified</span>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-1 text-orange-600 self-start bg-orange-50 px-2 py-1 rounded-lg">
-                                            <ShieldAlert size={14} />
-                                            <span className="font-semibold">Pending</span>
-                                        </div>
-                                    )}
                                 </div>
+
+                                {/* Verified badge — only shown when admin has verified */}
+                                {card.adminVerified && (
+                                    <div className="mt-auto pt-3 border-t border-slate-100">
+                                        <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg text-xs font-semibold">
+                                            <Shield size={12} /> Verified by Admin
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
-
                     </div>
                 </div>
 
             </div>
 
-            {/* Action Buttons (Outside Card - always visible) */}
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            {/* ── Action Buttons ── */}
+            <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                     onClick={(e) => { e.stopPropagation(); handleActualDownload('download-pdf'); }}
-                    className="flex items-center justify-center gap-1.5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-xl transition-colors"
-                    title={kycStatus === true ? 'Download PDF' : 'Complete KYC to download'}
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
+                    title="Download PDF (Front + Back)"
                 >
                     {kycStatus === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                    {kycStatus === true ? 'PDF' : kycStatus === 'loading' ? '...' : <span className="flex items-center gap-1"><Lock size={12} /> PDF</span>}
+                    PDF (Both Sides)
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); handleActualDownload('download-img'); }}
-                    className="flex items-center justify-center gap-1.5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium rounded-xl transition-colors"
-                    title={kycStatus === true ? 'Download Image' : 'Complete KYC to download'}
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
+                    title="Download Image (Front + Back)"
                 >
                     {kycStatus === 'loading' ? <Loader2 size={14} className="animate-spin" /> : <Smartphone size={14} />}
-                    {kycStatus === true ? 'Image' : kycStatus === 'loading' ? '...' : <span className="flex items-center gap-1"><Lock size={12} /> Img</span>}
+                    Image (Both Sides)
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); setIsFlipped(!isFlipped); }}
-                    className="flex items-center justify-center gap-1.5 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-medium rounded-xl transition-colors border border-teal-200"
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors border border-slate-200"
                 >
-                    <RefreshCw size={14} /> Flip
-                </button>
-                <button
-                    onClick={(e) => e.stopPropagation()}
-                    className={`flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium rounded-xl transition-colors col-span-1 ${card.adminVerified ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-slate-50 text-slate-400 cursor-not-allowed'}`}
-                    disabled={!card.adminVerified}
-                    title={card.adminVerified ? 'Wallet' : 'Wallet restricted until KYC is verified'}
-                >
-                    {card.adminVerified ? <Wallet size={14} /> : <Lock size={12} />} Wallet
+                    <RefreshCw size={14} /> Flip Card
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); setIsEmailModalOpen(true); }}
-                    className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors col-span-2"
+                    className="flex items-center justify-center gap-1.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl transition-colors border border-slate-200"
                 >
                     <Mail size={14} /> Email Card
                 </button>
             </div>
 
-            {/* 3D Transform CSS - Smooth 500ms animation */}
+            {/* 3D Transform CSS */}
             <style jsx global>{`
-                .perspective-1000 {
-                    perspective: 1000px;
-                }
-                .transform-style-3d {
-                    transform-style: preserve-3d;
-                }
+                .perspective-1000 { perspective: 1200px; }
+                .transform-style-3d { transform-style: preserve-3d; }
                 .backface-hidden {
                     backface-visibility: hidden;
                     -webkit-backface-visibility: hidden;
                 }
-                .rotate-y-180 {
-                    transform: rotateY(180deg);
-                }
+                .rotate-y-180 { transform: rotateY(180deg); }
+                .custom-scroll::-webkit-scrollbar { width: 4px; }
+                .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+                .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+                .custom-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
             `}</style>
 
             <EmailECardModal

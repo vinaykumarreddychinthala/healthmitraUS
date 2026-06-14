@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -13,6 +14,8 @@ import {
   MessageSquare,
   AlertTriangle,
   User,
+  Heart,
+  Receipt,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ServiceCard } from "@/components/client/services/ServiceCard";
@@ -88,6 +91,24 @@ const SERVICES = [
     icon: Gift,
     colorClass: "text-pink-600 bg-pink-50",
     link: "/service-requests/new?type=voucher",
+  },
+  {
+    id: "companion",
+    title: "Companion Services",
+    description:
+      "Book a trained companion for hospital visits, travel, or daily support.",
+    icon: Heart,
+    colorClass: "text-rose-600 bg-rose-50",
+    link: "/service-requests/new?type=companion",
+  },
+  {
+    id: "bill_reimbursement",
+    title: "Bill Reimbursement",
+    description:
+      "Submit hospital or medical bills for reimbursement review and approval.",
+    icon: Receipt,
+    colorClass: "text-emerald-600 bg-emerald-50",
+    link: "/service-requests/new?type=bill_reimbursement",
   },
   {
     id: "general",
@@ -220,6 +241,16 @@ export default function ServiceRequestsPage() {
     // Status filter
     if (filters.status !== "all" && req.status !== filters.status) return false;
 
+    // Member filter — check details.memberId or details.policy_holder_relation
+    if (filters.member !== "all") {
+      const memberVal = filters.member.toLowerCase();
+      const memberId = (req.details?.memberId || req.details?.policy_holder_relation || "").toLowerCase();
+      const policyHolderRelation = (req.details?.policy_holder_relation || "").toLowerCase();
+      // Match against memberId or relation
+      const matches = memberId.includes(memberVal) || policyHolderRelation.includes(memberVal);
+      if (!matches) return false;
+    }
+
     // Date filter
     if (filters.dateRange !== "all") {
       const reqDate = new Date(req.created_at);
@@ -244,8 +275,11 @@ export default function ServiceRequestsPage() {
         case "custom":
           if (filters.customStart && reqDate < new Date(filters.customStart))
             return false;
-          if (filters.customEnd && reqDate > new Date(filters.customEnd))
-            return false;
+          if (filters.customEnd) {
+            const endDate = new Date(filters.customEnd);
+            endDate.setHours(23, 59, 59, 999);
+            if (reqDate > endDate) return false;
+          }
           break;
       }
     }

@@ -15,11 +15,6 @@ export function HeroSection() {
           {/* Content */}
           <div className="flex flex-col gap-8">
             <div className="space-y-6">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-secondary/10 rounded-full border border-secondary/20 w-fit">
-                <div className="w-2 h-2 bg-secondary rounded-full"></div>
-                <span className="text-sm font-bold text-black">Trusted by Thousands of Families</span>
-              </div>
-
               <h1 className="text-5xl md:text-7xl lg:text-6xl font-bold text-balance text-primary leading-tight tracking-tight">
                 Premium Healthcare for Your Loved Ones
               </h1>

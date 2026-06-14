@@ -65,6 +65,7 @@ export async function login(formData: FormData) {
     }
 
     // For customers, check if they have any active members/plans
+    const today = new Date().toISOString().split('T')[0];
     const { data: allMembers, error: membersError } = await adminClient
       .from('ecard_members')
       .select('id, valid_till')
@@ -79,11 +80,32 @@ export async function login(formData: FormData) {
       return { error: "No active plan found. Please go and buy a plan." };
     }
 
-    const today = new Date().toISOString().split('T')[0];
     const hasActivePlan = allMembers.some(m => m.valid_till && m.valid_till >= today);
     if (!hasActivePlan) {
       await supabase.auth.signOut();
       return { error: "Your plan has expired. Please go and buy the plan again." };
+    }
+
+    // Check KYC status — redirect directly so there's no double-redirect
+    const activeIds = allMembers
+      .filter(m => m.valid_till && m.valid_till >= today)
+      .map(m => m.id);
+
+    if (activeIds.length > 0) {
+      const { data: kycRecords } = await adminClient
+        .from('policy_holder_kyc')
+        .select('member_id')
+        .eq('kyc_submitted', true)
+        .eq('admin_reset', false)
+        .in('member_id', activeIds);
+
+      const completedKycIds = new Set((kycRecords || []).map((k: { member_id: string }) => k.member_id));
+      const hasPendingKyc = activeIds.some(id => !completedKycIds.has(id));
+
+      if (hasPendingKyc) {
+        revalidatePath("/", "layout");
+        return { success: true, redirect: "/e-cards" };
+      }
     }
   }
 

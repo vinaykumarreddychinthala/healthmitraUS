@@ -1,9 +1,0 @@
-﻿app/(client)/my-purchases/[id]/page.tsx(9,10): error TS2305: Module '"@/types/purchase"' has no exported member 'Plan'.
-app/(client)/my-purchases/[id]/page.tsx(114,37): error TS2322: Type '{ id: string; text: string; }' is not assignable to type 'ReactNode'.
-components/client/purchases/PlanList.tsx(69,49): error TS2740: Type 'PurchasedPlan' is missing the following properties from type 'PurchasedPlan': planId, membersCount, transactionId, amountPaid, and 4 more.
-lib/api/purchases.ts(23,21): error TS2322: Type 'string' is not assignable to type '{ id: string; text: string; }'.
-lib/api/purchases.ts(24,21): error TS2322: Type 'string' is not assignable to type '{ id: string; text: string; }'.
-lib/api/purchases.ts(25,21): error TS2322: Type 'string' is not assignable to type '{ id: string; text: string; }'.
-lib/api/purchases.ts(26,21): error TS2322: Type 'string' is not assignable to type '{ id: string; text: string; }'.
-lib/api/purchases.ts(27,21): error TS2322: Type 'string' is not assignable to type '{ id: string; text: string; }'.
-lib/api/purchases.ts(28,21): error TS2322: Type 'string' is not assignable to type '{ id: string; text: string; }'.

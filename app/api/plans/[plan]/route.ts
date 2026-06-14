@@ -12,6 +12,7 @@ export async function GET(
             .from('plans')
             .select('*')
             .eq('id', resolvedParams.plan)
+            .eq('status', 'active')
             .single();
 
         if (error || !data) {

@@ -1,0 +1,30 @@
+
+Payment Receipt
+Hey , Tanu Jain. Thank you for Purchasing your Preventive Health Plan from us we’re glad you did.An Email has been sent to your registered Email ID with your User ID and Password .Kindly update the same.
+________________________________________
+Payment No.
+E230623GVSY5QU
+Payment Date
+23-Jun--23
+________________________________________
+Client
+Tanu Jain
+(+91) 880270491919
+replytojain@gmail.com
+Payment To
+Health Mitra
+(+91) 9818823106
+service@healthmitraus.com
+Description
+Amount
+________________________________________
+Couple Plan with Extra Member
+₹   1
+________________________________________
+Basic Price
+₹   9999.00
+Discount
+₹   9998.00
+Tax
+₹   0.00
+Total: ₹   1

@@ -40,9 +40,10 @@ export default function SettingsView() {
             items: [
                 { icon: User, label: "Profile Settings", description: "Name, email, phone, avatar", href: "/profile" },
                 { icon: Lock, label: "Change Password", description: "Update your password", href: "/profile?tab=security" },
-                { icon: Key, label: "Two-Factor Authentication", description: "Extra security layer", href: "/profile?tab=security" },
+                // { icon: Key, label: "Two-Factor Authentication", description: "Extra security layer", href: "/profile?tab=security" },
             ]
         },
+        /*
         {
             title: "Notifications",
             items: [
@@ -50,10 +51,11 @@ export default function SettingsView() {
                 { icon: FileText, label: "Activity Logs", description: "View login history", href: "/profile?tab=security" },
             ]
         },
+        */
         {
             title: "Billing",
             items: [
-                { icon: CreditCard, label: "Payment Methods", description: "Cards, UPI, wallets", href: "/wallet" },
+                // { icon: CreditCard, label: "Payment Methods", description: "Cards, UPI, wallets", href: "/wallet" },
                 { icon: FileText, label: "Invoices & Bills", description: "View payment history", href: "/invoices" },
             ]
         },

@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
         // Send email to admin
         await sendMail({
-            to: process.env.SMTP_FROM || 'admin@healthmitra.com',
+            to: process.env.ADMIN_EMAIL || 'service@healthmitraus.com',
             subject: `New Medical Consultation Request - ${specialty}`,
             html: medicalConsultationRequestTemplate({
                 name,

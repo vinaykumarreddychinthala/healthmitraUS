@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Upload, X, CheckCircle, ChevronLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { createClaim } from '@/lib/api/client';
+import { submitClaim } from '@/app/actions/reimbursements';
 
 interface ClaimFormProps {
     userProfile: any;
@@ -54,9 +54,9 @@ export default function ClaimForm({ userProfile, policyMembers }: ClaimFormProps
                 created_at: new Date().toISOString()
             };
 
-            const { error } = await createClaim(claimData);
+            const result = await submitClaim(claimData);
 
-            if (error) throw error;
+            if (!result || !result.success) throw new Error(result?.error || 'Unknown error');
 
             toast.success('Claim Submitted Successfully', {
                 description: 'Your claim has been recorded and is pending review.'

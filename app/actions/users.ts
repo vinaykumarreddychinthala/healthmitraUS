@@ -3,6 +3,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { User, UserType } from '@/types/user';
 import { sendMail } from '@/lib/email';
+import { franchiseWelcomeTemplate } from '@/lib/email-templates';
 
 // --- USER ACTIONS ---
 
@@ -252,23 +253,36 @@ export async function createUser(data: Partial<User> & { departmentId?: string; 
     // Send welcome email with credentials
     if (data.email) {
         try {
-            await sendMail({
-                to: data.email,
-                subject: 'Welcome to HealthMitra - Account Created',
-                devData: { 'Email': data.email, 'Password': tempPassword },
-                html: `
-                    <div style="font-family: sans-serif; max-width: 600px; margin: auto;">
-                        <p>Dear ${data.name || 'User'},</p>
-                        <p>An account has been created for you on HealthMitra.</p>
-                        <p>Here are your login credentials:</p>
-                        <ul>
-                            <li><strong>User ID / Email:</strong> ${data.email}</li>
-                            <li><strong>Password:</strong> ${tempPassword}</li>
-                        </ul>
-                        <p>Please login at <a href="https://www.healthmitraus.com">www.healthmitraus.com</a>.</p>
-                    </div>
-                `
-            });
+            if (role === 'franchise_owner') {
+                await sendMail({
+                    to: data.email,
+                    subject: 'Welcome to HealthMitra Parivar',
+                    devData: { 'Email': data.email, 'Password': tempPassword },
+                    html: franchiseWelcomeTemplate({
+                        franchiseName: data.name || 'Partner',
+                        userId: data.email,
+                        password: tempPassword
+                    })
+                });
+            } else {
+                await sendMail({
+                    to: data.email,
+                    subject: 'Welcome to HealthMitra - Account Created',
+                    devData: { 'Email': data.email, 'Password': tempPassword },
+                    html: `
+                        <div style="font-family: sans-serif; max-width: 600px; margin: auto;">
+                            <p>Dear ${data.name || 'User'},</p>
+                            <p>An account has been created for you on HealthMitra.</p>
+                            <p>Here are your login credentials:</p>
+                            <ul>
+                                <li><strong>User ID / Email:</strong> ${data.email}</li>
+                                <li><strong>Password:</strong> ${tempPassword}</li>
+                            </ul>
+                            <p>Please login at <a href="https://www.healthmitraus.com">www.healthmitraus.com</a>.</p>
+                        </div>
+                    `
+                });
+            }
         } catch (mailError) {
             console.error('Error sending welcome email:', mailError);
         }

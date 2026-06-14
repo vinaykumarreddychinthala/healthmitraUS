@@ -2,6 +2,13 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { WithdrawalRequest, WithdrawalStatus } from '@/types/wallet';
+import { sendMail } from '@/lib/email';
+import { 
+    ewalletRedemptionToCustomerTemplate, 
+    ewalletRedemptionToAdminTemplate,
+    ewalletRefundNotInitiatedActionTemplate,
+    ewalletRefundInitiatedTemplate
+} from '@/lib/email-templates';
 
 export async function getWithdrawals(): Promise<{ success: boolean; data?: WithdrawalRequest[]; error?: string }> {
     const supabase = await createAdminClient();
@@ -87,6 +94,50 @@ export async function processWithdrawal(
         return { success: false, error: error.message };
     }
 
+    // Send email to customer
+    try {
+        const { data: request } = await adminClient
+            .from('withdrawal_requests')
+            .select('customer_name, customer_email, amount')
+            .eq('id', id)
+            .single();
+
+        if (request && request.customer_email) {
+            if (action === 'approve') {
+                await sendMail({
+                    to: request.customer_email,
+                    subject: 'E-Wallet Redemption Approved - HealthMitra',
+                    html: ewalletRedemptionToCustomerTemplate({
+                        customerName: request.customer_name,
+                        amount: request.amount,
+                        transactionId: notes || 'Processed'
+                    })
+                });
+            } else if (action === 'complete') {
+                await sendMail({
+                    to: request.customer_email,
+                    subject: 'E-Wallet Refund Initiated - HealthMitra',
+                    html: ewalletRefundInitiatedTemplate({
+                        amount: request.amount,
+                        utrNo: notes || 'N/A',
+                        date: new Date().toLocaleDateString()
+                    })
+                });
+            } else if (action === 'reject') {
+                await sendMail({
+                    to: request.customer_email,
+                    subject: 'E-Wallet Redemption Update - HealthMitra',
+                    html: ewalletRefundNotInitiatedActionTemplate({
+                        customerName: request.customer_name,
+                        amount: request.amount
+                    })
+                });
+            }
+        }
+    } catch (emailError) {
+        console.error('Failed to send withdrawal email:', emailError);
+    }
+
     return { success: true };
 }
 
@@ -116,6 +167,21 @@ export async function createWithdrawalRequest(
 
     if (error) {
         return { success: false, error: error.message };
+    }
+
+    // Send notification to admin
+    try {
+        await sendMail({
+            to: process.env.ADMIN_EMAIL || 'service@healthmitraus.com',
+            subject: 'New E-Wallet Redemption Request',
+            html: ewalletRedemptionToAdminTemplate({
+                customerName,
+                amount,
+                requestId: 'Pending'
+            })
+        });
+    } catch (emailError) {
+        console.error('Failed to send admin notification for withdrawal:', emailError);
     }
 
     return { success: true };

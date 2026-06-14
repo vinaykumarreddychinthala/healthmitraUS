@@ -5,7 +5,12 @@ import { ReimbursementClaim, ClaimStatus } from '@/types/reimbursements';
 import { sendMail } from '@/lib/email';
 import { 
     billReimbursementOpdTemplate, 
-    billRejectedTemplate 
+    billReimbursementTestTemplate,
+    billReimbursementMedicineTemplate,
+    billReimbursementVaccinationTemplate,
+    billRejectedTemplate,
+    billUploadTimelineTemplate,
+    adminBillUploadedTemplate
 } from '@/lib/email-templates';
 
 export async function getClaims() {
@@ -77,15 +82,29 @@ export async function processClaim(id: string, status: ClaimStatus, data: { amou
                 
             if (profile?.email) {
                 if (status === 'approved') {
+                    const titleLowerCase = (claim.title || '').toLowerCase();
+                    let emailHtml = '';
+                    const templateProps = {
+                        customerName: profile.full_name || profile.email.split('@')[0],
+                        amount: data.amount || 0,
+                        percentage: '100', // Default or calculated
+                        taxAmount: '0' // Default or calculated
+                    };
+
+                    if (titleLowerCase.includes('test') || titleLowerCase.includes('diagnostic')) {
+                        emailHtml = billReimbursementTestTemplate(templateProps);
+                    } else if (titleLowerCase.includes('medicine') || titleLowerCase.includes('pharmacy')) {
+                        emailHtml = billReimbursementMedicineTemplate(templateProps);
+                    } else if (titleLowerCase.includes('vaccination') || titleLowerCase.includes('vaccine')) {
+                        emailHtml = billReimbursementVaccinationTemplate(templateProps);
+                    } else {
+                        emailHtml = billReimbursementOpdTemplate(templateProps);
+                    }
+
                     await sendMail({
                         to: profile.email,
                         subject: `Reimbursement Approved - HealthMitra`,
-                        html: billReimbursementOpdTemplate({
-                            customerName: profile.full_name || profile.email.split('@')[0],
-                            amount: data.amount || 0,
-                            percentage: '100', // Default or calculated
-                            taxAmount: '0' // Default or calculated
-                        })
+                        html: emailHtml
                     });
                 } else if (status === 'rejected') {
                     await sendMail({
@@ -104,4 +123,59 @@ export async function processClaim(id: string, status: ClaimStatus, data: { amou
     }
 
     return { success: true, message: `Claim ${status} successfully` };
+}
+
+export async function submitClaim(claimData: any) {
+    const supabase = await createAdminClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    const { data, error } = await supabase
+        .from('reimbursement_claims')
+        .insert({
+            user_id: user.id,
+            plan_id: claimData.plan_id || null,
+            plan_name: claimData.plan_name || 'Health Plan',
+            title: `Reimbursement for ${claimData.patient_name} - ${claimData.diagnosis}`,
+            provider_name: claimData.hospital_name,
+            bill_date: claimData.treatment_date,
+            amount: claimData.amount,
+            amount_requested: claimData.amount,
+            status: 'pending',
+            customer_comments: claimData.diagnosis,
+            documents: claimData.documents || [],
+        })
+        .select()
+        .single();
+
+    if (error) return { success: false, error: error.message };
+
+    try {
+        // Send email to customer
+        const { data: profile } = await supabase.from('profiles').select('email, full_name').eq('id', user.id).single();
+        if (profile?.email) {
+            const customerName = profile.full_name || profile.email.split('@')[0];
+            await sendMail({
+                to: profile.email,
+                subject: `Bill Reimbursement Request Received - HealthMitra`,
+                html: billUploadTimelineTemplate({ customerName })
+            });
+
+            // Send email to Admin
+            await sendMail({
+                to: process.env.ADMIN_EMAIL || 'admin@healthmitraus.com',
+                subject: `New Bill Uploaded by ${customerName}`,
+                html: adminBillUploadedTemplate({
+                    adminName: 'Admin',
+                    customerName: customerName,
+                    ticketId: data.claim_id_display || data.id,
+                    type: 'Reimbursement'
+                })
+            });
+        }
+    } catch (emailErr) {
+        console.error('Failed to send claim notification emails:', emailErr);
+    }
+
+    return { success: true, data };
 }

@@ -1,2 +1,0 @@
-﻿components/client/purchases/PlanDetailsSheet.tsx(9,10): error TS2459: Module '"@/types/dashboard"' declares 'PurchasedPlan' locally, but it is not exported.
-components/client/purchases/PlanDetailsSheet.tsx(190,56): error TS7006: Parameter 'b' implicitly has an 'any' type.

@@ -8,7 +8,7 @@ import KYCDetailsReadOnly from '@/components/client/e-cards/KYCDetailsReadOnly';
 import { ECardMember } from '@/types/ecard';
 import {
     CreditCard, Clock, ShieldCheck, ShieldAlert, Plus,
-    ChevronRight, CheckCircle2, AlertCircle, Lock, UserPlus
+    ChevronRight, CheckCircle2, AlertCircle, Lock, UserPlus, Tag
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
@@ -37,23 +37,25 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
         dob: c.dob,
         age: c.dob ? Math.floor((new Date().getTime() - new Date(c.dob).getTime()) / 31557600000) : c.age,
         gender: c.gender,
-        bloodGroup: c.blood_group,
-        memberId: c.member_id,
+        bloodGroup: c.blood_group || '',
+        memberId: c.member_id || c.member_id_code || '',
         planId: c.plan_id,
         planName: c.plan_name || 'Health Plan',
         planPrice: c.plan_price,
-        validFrom: c.valid_from || new Date().toISOString(),
-        validTill: c.valid_till || '2025-12-31',
-        policyNo: c.policy_number,
+        validFrom: c.valid_from || 'N/A',
+        validTill: c.valid_till || 'N/A',
+        policyNo: c.policy_number || '',
+        policyId: c.policy_id || '',
         issuedDate: c.issued_date || new Date().toISOString(),
-        emergencyContact: c.emergency_contact || '1800-123-4567',
+        emergencyContact: c.emergency_contact || '9818823106',
         coverageAmount: c.coverage_amount,
         status: (c.status as any) || 'pending',
-        cardUniqueId: c.card_unique_id || `HM-${c.id.substring(0, 8).toUpperCase()}`,
+        cardUniqueId: c.card_unique_id || c.card_number || `HM-${c.id.substring(0, 8).toUpperCase()}`,
         planDescription: 'Comprehensive health coverage',
-        planFeatures: Array.isArray(c.plan_features) ? c.plan_features : ['Cashless Hospitalization', '24/7 Support'],
+        planFeatures: Array.isArray(c.plan_features) ? c.plan_features : [],
         kycSubmitted: c.kycSubmitted || false,
         adminVerified: c.adminVerified || false,
+        photoUrl: c.photo_url || undefined,
     })));
 
     // KYC data per memberId (for read-only display)
@@ -147,15 +149,17 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
                         </div>
                         <div className="flex-1 min-w-0">
                             <h3 className="font-bold text-red-900 text-lg">
-                                Complete Card Details to Access Services
+                                Complete Member Details to Access Services
                             </h3>
                             <p className="text-red-700 text-sm mt-1">
-                                You must fill details for <strong>ALL {cards.length} member slots</strong> in your plan before you can access Dashboard Services. 
-                                Currently, <strong>{pendingCards.length} slot(s)</strong> remain empty.
+                                To unlock and access all Dashboard Services, please complete the details for all <strong>({cards.length}) member(s)</strong> included in your plan. <strong>({pendingCards.length}) member profile(s)</strong> is still pending completion. Fill in the required information to continue.
                             </p>
-                        </div>
-                        <div className="flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold shrink-0 shadow-md shadow-red-200">
-                            {cards.length - pendingCards.length}/{cards.length} Filled
+                            <p className="text-red-800 font-semibold text-sm mt-2">
+                                Pending Profiles: ({pendingCards.length}) of ({cards.length}) Member(s) Remaining. 
+                                <a href="/e-cards" className="underline text-red-600 hover:text-red-800 ml-1 font-bold cursor-pointer inline-block mt-1 sm:mt-0">
+                                    Download E-Card / Fill Details
+                                </a>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -193,12 +197,22 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
             </div>
 
             {/* Display by Plan Groups */}
-            {Array.from(planGroups.entries()).map(([planName, planCards]) => (
+            {Array.from(planGroups.entries()).map(([planName, planCards]) => {
+                // Get policy ID for this plan group (same for all cards in the group)
+                const policyId = planCards[0]?.policyId;
+                return (
                 <section key={planName} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-100 gap-3">
                         <div>
                             <h2 className="text-xl font-bold text-slate-800">{planName}</h2>
                             <p className="text-sm text-slate-500 mt-1">Purchased slots: {planCards.length}</p>
+                            {policyId && (
+                                <div className="flex items-center gap-1.5 mt-2">
+                                    <Tag size={13} className="text-teal-600" />
+                                    <span className="text-xs font-semibold text-slate-600">Policy ID:</span>
+                                    <span className="font-mono text-xs font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full tracking-wide">{policyId}</span>
+                                </div>
+                            )}
                         </div>
                         {planCards.every(c => c.kycSubmitted) ? (
                             <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-full flex items-center gap-1.5">
@@ -294,7 +308,8 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
                         })}
                     </div>
                 </section>
-            ))}
+                );
+            })}
 
             {/* KYC Fill Modal */}
             <PolicyHolderKYCModal

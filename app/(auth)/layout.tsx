@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, Activity, Heart } from "lucide-react";
+import { Activity, Heart } from "lucide-react";
 
 export default function AuthLayout({
   children,
@@ -17,13 +17,8 @@ export default function AuthLayout({
 
         {/* Logo */}
         <div className="relative z-10">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-teal-500/20">
-              <ShieldCheck className="text-white h-6 w-6" />
-            </div>
-            <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-teal-200 to-white">
-              HealthMitra
-            </span>
+          <Link href="/" className="flex items-center">
+            <img src="/logo.jpg" alt="HealthMitra" className="h-14 w-auto" />
           </Link>
         </div>
 

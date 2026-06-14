@@ -46,12 +46,14 @@ export async function createSupportTicket(data: CreateTicketInput) {
 
     const { subject, description, category, priority } = data;
 
+    const ticketId = `TKT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+
     // Insert into service_requests
     const { data: ticket, error } = await supabase.from('service_requests').insert({
         user_id: user.id,
         type: 'other',
         status: 'pending',
-        request_id_display: `TKT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+        request_id_display: ticketId,
         details: {
             subject,
             description,
@@ -63,8 +65,81 @@ export async function createSupportTicket(data: CreateTicketInput) {
 
     if (error) return { success: false, error: error.message };
 
+    // Send confirmation email to customer
+    try {
+        const { sendMail } = await import('@/lib/email');
+
+        // Get user email from profile
+        const { data: profile } = await supabase.from('profiles')
+            .select('email, full_name')
+            .eq('id', user.id)
+            .single();
+
+        const userEmail = profile?.email || user.email || '';
+        const userName = profile?.full_name || 'Customer';
+
+        if (userEmail) {
+            await sendMail({
+                to: userEmail,
+                subject: `Support Ticket Received — ${ticketId}`,
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; background: #f9fafb; border-radius: 12px;">
+                        <div style="background: linear-gradient(135deg, #0d9488, #06b6d4); padding: 24px; border-radius: 10px 10px 0 0; text-align: center;">
+                            <h1 style="color: white; margin: 0; font-size: 22px;">HealthMitra Support</h1>
+                            <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px;">Your Health, Our Priority</p>
+                        </div>
+                        <div style="background: white; padding: 28px; border-radius: 0 0 10px 10px; border: 1px solid #e2e8f0;">
+                            <p style="color: #334155; font-size: 16px;">Dear <strong>${userName}</strong>,</p>
+                            <p style="color: #475569;">We have received your support request. Our team will get back to you within 24 hours.</p>
+
+                            <div style="background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                                <p style="margin: 0 0 8px; color: #0f766e; font-weight: bold;">Ticket Details</p>
+                                <p style="margin: 4px 0; color: #334155;"><strong>Ticket ID:</strong> ${ticketId}</p>
+                                <p style="margin: 4px 0; color: #334155;"><strong>Category:</strong> ${category}</p>
+                                <p style="margin: 4px 0; color: #334155;"><strong>Subject:</strong> ${subject}</p>
+                                <p style="margin: 4px 0; color: #334155;"><strong>Priority:</strong> ${priority}</p>
+                                <p style="margin: 4px 0; color: #334155;"><strong>Status:</strong> Open</p>
+                            </div>
+
+                            <p style="color: #475569;">Your message:<br/>
+                            <em style="color: #64748b;">"${description}"</em></p>
+
+                            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                                <p style="color: #94a3b8; font-size: 13px; margin: 0;">Need urgent help? Contact us:</p>
+                                <p style="color: #0d9488; font-size: 13px; margin: 4px 0;">📞 +91 9818823106 | 📧 service@healthmitraus.com</p>
+                                <p style="color: #94a3b8; font-size: 12px; margin: 12px 0 0;">© 2025 HealthMitra Systems Pvt Ltd. All rights reserved.</p>
+                            </div>
+                        </div>
+                    </div>
+                `
+            });
+        }
+
+        // Also notify admin
+        const adminEmail = process.env.ADMIN_EMAIL || 'service@healthmitraus.com';
+        await sendMail({
+            to: adminEmail,
+            subject: `[New Support Ticket] ${ticketId} — ${category}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 20px;">
+                    <h2 style="color: #0f766e;">New Support Ticket</h2>
+                    <p><strong>Ticket ID:</strong> ${ticketId}</p>
+                    <p><strong>From:</strong> ${userName} (${userEmail})</p>
+                    <p><strong>Category:</strong> ${category}</p>
+                    <p><strong>Subject:</strong> ${subject}</p>
+                    <p><strong>Priority:</strong> ${priority}</p>
+                    <p><strong>Message:</strong><br/>${description}</p>
+                </div>
+            `
+        });
+    } catch (emailError) {
+        // Email failure should not block ticket creation
+        console.error('Support ticket email notification failed:', emailError);
+    }
+
     return { success: true, data: ticket };
 }
+
 
 // --- SERVICE REQUESTS (SUPPORT) ---
 

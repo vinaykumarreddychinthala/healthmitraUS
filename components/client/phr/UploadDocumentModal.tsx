@@ -3,7 +3,6 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { createClient } from '@/lib/supabase/client';
 
 interface UploadModalProps {
     isOpen: boolean;
@@ -13,7 +12,6 @@ interface UploadModalProps {
 }
 
 export default function UploadDocumentModal({ isOpen, onClose, memberId, userId }: UploadModalProps) {
-    const supabase = createClient();
     const [isUploading, setIsUploading] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [category, setCategory] = useState('Prescriptions');
@@ -39,40 +37,45 @@ export default function UploadDocumentModal({ isOpen, onClose, memberId, userId 
 
         setIsUploading(true);
         try {
-            const fileExt = selectedFile.name.split('.').pop();
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-            const folder = category.toLowerCase().replace(' ', '_');
-            const filePath = `phr/${folder}/${userId || 'unknown'}/${fileName}`;
+            // Step 1: Upload file via server-side API (bypasses storage RLS)
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('bucket', 'documents');
+            formData.append('folder', `phr/${category.toLowerCase().replace(/ /g, '_')}`);
 
-            const { error: uploadError } = await supabase.storage
-                .from('documents')
-                .upload(filePath, selectedFile, {
-                    cacheControl: '3600',
-                    upsert: false,
-                });
+            const uploadRes = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
 
-            if (uploadError) {
-                toast.error('Upload failed: ' + uploadError.message);
+            const uploadJson = await uploadRes.json();
+            if (!uploadJson.success) {
+                toast.error('Upload failed: ' + uploadJson.error);
                 setIsUploading(false);
                 return;
             }
 
-            const { data: { publicUrl } } = supabase.storage
-                .from('documents')
-                .getPublicUrl(filePath);
+            const publicUrl = uploadJson.data.url;
 
-            const { error: dbError } = await supabase.from('phr_documents').insert({
-                user_id: userId,
-                member_id: selectedMember,
-                document_type: category,
-                document_url: publicUrl,
-                document_name: selectedFile.name,
-                document_date: documentDate || new Date().toISOString(),
-                tags: tags ? tags.split(',').map(t => t.trim()) : [],
+            // Step 2: Save metadata via server-side API (bypasses phr_documents RLS)
+            const metaRes = await fetch('/api/phr/upload-meta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    member_id: (selectedMember === 'self' || selectedMember === '') ? null : selectedMember,
+                    category,
+                    file_url: publicUrl,
+                    name: selectedFile.name,
+                    file_size: (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB',
+                    tags: tags ? tags.split(',').map(t => t.trim()) : [],
+                }),
             });
 
-            if (dbError) {
-                console.error('DB insert error:', dbError);
+            const metaJson = await metaRes.json();
+            if (!metaJson.success) {
+                console.error('Metadata save error:', metaJson.error);
+                // Don't block on metadata failure — file is already uploaded
             }
 
             toast.success('Document uploaded successfully');

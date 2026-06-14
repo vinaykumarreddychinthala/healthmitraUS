@@ -49,7 +49,7 @@ function LoginFormContent() {
         {purchased && (
           <div className="mt-4 p-4 bg-emerald-50 text-emerald-700 text-sm rounded-xl border border-emerald-200 text-left space-y-1">
             <p className="font-bold text-emerald-800 flex items-center gap-2">✅ Purchase Successful!</p>
-            <p>We&apos;ve sent your <strong>User ID</strong> and <strong>Password</strong> to your email.</p>
+          <p>We&apos;ve sent your <strong>Email</strong> and <strong>Password</strong> to your email.</p>
             <p className="text-xs text-emerald-600 mt-1">Enter those credentials below to access your Customer Panel.</p>
           </div>
         )}
@@ -69,14 +69,14 @@ function LoginFormContent() {
 
       <form action={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">User ID</Label>
+          <Label htmlFor="email">Email Address</Label>
           <div className="relative">
             <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <Input
               id="email"
               name="email"
-              type="text"
-              placeholder="HM-XXXXXX or Email"
+              type="email"
+              placeholder="your@email.com"
               required
               className="pl-10 bg-slate-50 border-slate-200"
             />

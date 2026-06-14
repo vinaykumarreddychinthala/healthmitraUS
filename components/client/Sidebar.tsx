@@ -16,7 +16,7 @@ import {
     FileText,
     FolderHeart,
     Settings,
-    Bell
+    Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signout } from "@/app/actions/auth";
@@ -86,13 +86,6 @@ export function Sidebar() {
                 </nav>
             </div>
 
-            <div className="p-4 mx-4 mb-4">
-                <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-4 text-white shadow-lg relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-10 translate-x-10 group-hover:translate-x-5 transition-transform duration-500" />
-                    <p className="font-bold relative z-10">Premium Member</p>
-                    <p className="text-xs text-indigo-100 mt-1 relative z-10">Your health is protected.</p>
-                </div>
-            </div>
 
             <div className="border-t border-slate-100 p-4">
                 <button 

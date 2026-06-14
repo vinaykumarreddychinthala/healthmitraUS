@@ -6,7 +6,7 @@ import {
 } from "@/types/dashboard";
 import {
     ShieldCheck, CreditCard, Wallet, Clock, Plus, Gift,
-    Stethoscope, Users, Receipt, Heart, Phone, Calendar, ArrowRight
+    Stethoscope, Users, Receipt, Heart, Phone, Calendar, ArrowRight, HelpCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,8 +60,13 @@ export function QuickStats({
                         <div>
                             <ShieldCheck className="mb-3 h-10 w-10 text-white/90" />
                             <h3 className="text-lg font-semibold">
-                                {plans.length === 0 ? "No Active Plan" : plans.length === 1 ? plans[0].name : "Multiple Plans Active"}
+                                {plans.length === 0 ? "No Active Plan" : `${plans.length} Active Plan${plans.length > 1 ? 's' : ''}`}
                             </h3>
+                            {plans.length > 0 && (
+                                <p className="text-xs text-cyan-100 mt-0.5">
+                                    {plans.map(p => p.name).join(' · ')}
+                                </p>
+                            )}
                         </div>
                         {furthestPlan?.validUntil && !isNaN(new Date(furthestPlan.validUntil).getTime()) ? (
                             <div className="space-y-1">
@@ -192,19 +197,7 @@ export function QuickStats({
                     </div>
                 </Link>
 
-                {/* Emergency Support Card */}
-                <Link href="/support" className="group relative flex flex-col justify-between rounded-xl border border-red-200 bg-gradient-to-br from-red-50 to-orange-50 p-5 shadow-sm transition-all duration-300 hover:shadow-md hover:scale-[1.02] cursor-pointer min-h-[160px]">
-                    <div>
-                        <Phone className="mb-3 h-10 w-10 text-red-600" />
-                        <h3 className="font-semibold text-slate-700">Emergency</h3>
-                        <p className="mt-2 text-sm text-slate-500">24/7 Support Available</p>
-                    </div>
-                    <div className="mt-4">
-                        <Button size="sm" variant="outline" className="w-full border-red-200 text-red-700 hover:bg-red-100">
-                            <Phone className="mr-1 h-3 w-3 shrink-0" /> Call Now
-                        </Button>
-                    </div>
-                </Link>
+
 
                 {/* Family Members Card */}
                 <Link href="/my-purchases" className="group relative flex flex-col justify-between rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-cyan-50 p-5 shadow-sm transition-all duration-300 hover:shadow-md hover:scale-[1.02] cursor-pointer min-h-[160px]">
@@ -226,6 +219,20 @@ export function QuickStats({
                     </div>
                     <div className="mt-2 text-xs font-medium text-sky-700 group-hover:underline">
                         Manage Members →
+                    </div>
+                </Link>
+
+                {/* Support & Help Card */}
+                <Link href="/support" className="group relative flex flex-col justify-between rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50 to-emerald-50 p-5 shadow-sm transition-all duration-300 hover:shadow-md hover:scale-[1.02] cursor-pointer min-h-[160px]">
+                    <div>
+                        <HelpCircle className="mb-3 h-10 w-10 text-teal-600" />
+                        <h3 className="font-semibold text-slate-700">Support &amp; Help</h3>
+                        <p className="mt-2 text-sm text-slate-500">24/7 assistance available</p>
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                        <Button size="sm" variant="outline" className="w-full border-teal-200 text-teal-700 hover:bg-teal-100 shadow-sm" onClick={(e) => { e.preventDefault(); window.location.href = 'tel:+919818823106'; }}>
+                            <Phone className="mr-1 h-3 w-3 shrink-0" /> Call
+                        </Button>
                     </div>
                 </Link>
             </div>

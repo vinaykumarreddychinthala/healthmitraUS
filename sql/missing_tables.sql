@@ -287,6 +287,8 @@ CREATE TABLE IF NOT EXISTS profiles (
     bank_name TEXT,
     bank_branch TEXT,
     account_type TEXT,
+    emergency_contact JSONB DEFAULT '{}'::jsonb,
+    country TEXT DEFAULT 'India',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

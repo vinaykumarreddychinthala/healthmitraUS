@@ -11,6 +11,7 @@ import {
   CreditCard,
   HeartHandshake,
   Siren,
+  Receipt,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -104,6 +105,18 @@ const services = [
       "Immediate Dispatch",
       "Priority Admission",
       "Family Alerts",
+    ],
+  },
+  {
+    icon: Receipt,
+    title: "Bill Reimbursements",
+    description:
+      "Submit and track your medical bills for quick and easy reimbursements. Get your money back directly to your bank account.",
+    features: [
+      "Quick Processing",
+      "Easy Uploads",
+      "Real-time Tracking",
+      "Direct Bank Transfer",
     ],
   },
 ];

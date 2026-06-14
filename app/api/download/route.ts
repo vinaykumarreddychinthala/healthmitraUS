@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
         switch (type) {
             case 'invoice':
                 return generateInvoice(supabase, user.id, data);
+            case 'receipt':
+                return generateReceipt(supabase, user.id, data);
             case 'reimbursement_receipt':
                 return generateReimbursementReceipt(supabase, user.id, data);
             case 'membership_card':
@@ -30,16 +32,45 @@ export async function POST(request: NextRequest) {
     }
 }
 
-function generateHTMLInvoice(invoice: any, purchase: any) {
-    const invoiceDate = new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'long', year: 'numeric' });
-    const gstAmount = 0;
-    const totalAmount = invoice.amount;
+function numberToWords(num: number): string {
+    const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const inWords = (n: number): string => {
+        if (n < 20) return a[n];
+        const digit = n % 10;
+        if (n < 100) return b[Math.floor(n / 10)] + (digit ? ' ' + a[digit] : '');
+        if (n < 1000) return a[Math.floor(n / 100)] + 'Hundred ' + (n % 100 === 0 ? '' : 'and ' + inWords(n % 100));
+        if (n < 100000) return inWords(Math.floor(n / 1000)) + 'Thousand ' + (n % 1000 === 0 ? '' : inWords(n % 1000));
+        return inWords(Math.floor(n / 100000)) + 'Lakh ' + (n % 100000 === 0 ? '' : inWords(n % 100000));
+    };
+    if (num === 0) return 'Zero';
+    return inWords(num).trim();
+}
+
+function generatePlanReceiptAndInvoiceHTML(invoice: any, purchase: any, isInvoice: boolean) {
+    const invoiceDate = new Date(invoice.created_at || new Date()).toLocaleDateString('en-GB'); // DD/MM/YYYY
+    const title = isInvoice ? 'Invoice' : 'Payment Receipt';
+    const amount = Number(invoice.amount || 0);
+    const amountInWords = numberToWords(amount);
+
+    let validity = '';
+    let term = '1';
+    if (purchase && purchase.valid_from && purchase.valid_till) {
+        validity = `${new Date(purchase.valid_from).toLocaleDateString('en-GB')} to ${new Date(purchase.valid_till).toLocaleDateString('en-GB')}`;
+        const diffTime = Math.abs(new Date(purchase.valid_till).getTime() - new Date(purchase.valid_from).getTime());
+        term = Math.round(diffTime / (1000 * 60 * 60 * 24 * 365)).toString();
+    } else {
+        validity = `${invoiceDate} to ${new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('en-GB')}`;
+    }
+
+    const patientName = purchase.full_name || invoice.email || 'Customer';
+    const patientAddress = invoice.address || 'N/A';
 
     return `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Invoice - ${invoice.invoice_number}</title>
+    <title>${title} - ${invoice.invoice_number}</title>
     <style>
         * {
             margin: 0;
@@ -47,331 +78,103 @@ function generateHTMLInvoice(invoice: any, purchase: any) {
             box-sizing: border-box;
         }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Times New Roman', Times, serif;
             background: #fff;
-            color: #333;
+            color: #000;
             line-height: 1.6;
             padding: 40px;
             max-width: 800px;
             margin: 0 auto;
         }
-        .invoice-container {
-            border: 2px solid #0d9488;
-            border-radius: 12px;
-            overflow: hidden;
+        .text-center {
+            text-align: center;
         }
-        .header {
-            background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
-            color: white;
-            padding: 30px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .logo {
-            font-size: 28px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .logo-icon {
-            width: 50px;
-            height: 50px;
-            background: white;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #0d9488;
+        .title {
             font-size: 24px;
             font-weight: bold;
+            text-decoration: underline;
+            margin-bottom: 40px;
         }
-        .invoice-title {
-            text-align: right;
-        }
-        .invoice-title h1 {
-            font-size: 32px;
-            font-weight: 700;
-            letter-spacing: 2px;
-        }
-        .invoice-title p {
-            opacity: 0.9;
-            font-size: 14px;
-        }
-        .invoice-number {
-            background: rgba(255,255,255,0.2);
-            padding: 8px 16px;
-            border-radius: 6px;
-            margin-top: 8px;
-            font-family: monospace;
-            font-size: 14px;
-        }
-        .body {
-            padding: 40px;
-        }
-        .section {
-            margin-bottom: 30px;
-        }
-        .section-title {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #0d9488;
-            font-weight: 600;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-        }
-        .info-item {
-            margin-bottom: 8px;
-        }
-        .info-label {
-            font-size: 12px;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .info-value {
-            font-size: 15px;
-            font-weight: 500;
-            color: #111;
-        }
-        .table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        .table th {
-            background: #f3f4f6;
-            padding: 12px 16px;
-            text-align: left;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #4b5563;
-            font-weight: 600;
-        }
-        .table td {
-            padding: 14px 16px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .table tr:last-child td {
-            border-bottom: none;
-        }
-        .table .text-right {
-            text-align: right;
-        }
-        .table .font-bold {
-            font-weight: 600;
-        }
-        .totals {
-            margin-top: 30px;
-            display: flex;
-            justify-content: flex-end;
-        }
-        .totals-table {
-            width: 280px;
-        }
-        .totals-row {
+        .flex-between {
             display: flex;
             justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 40px;
         }
-        .totals-row:last-child {
-            border-bottom: none;
-            font-size: 18px;
-            font-weight: 700;
-            color: #0d9488;
-            padding-top: 16px;
-            margin-top: 8px;
-            border-top: 2px solid #0d9488;
+        .patient-info {
+            margin-bottom: 40px;
         }
-        .status-badge {
-            display: inline-block;
-            background: #d1fae5;
-            color: #065f46;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
+        .patient-info p {
+            margin-bottom: 5px;
+        }
+        .certification {
+            margin-bottom: 40px;
+            text-align: justify;
+        }
+        .plan-details {
+            display: grid;
+            grid-template-columns: 200px 10px auto;
+            gap: 10px 0;
+            margin-bottom: 50px;
+        }
+        .tax-paragraph {
+            text-align: justify;
+            margin-bottom: 50px;
         }
         .footer {
-            background: #f9fafb;
-            padding: 30px 40px;
-            border-top: 1px solid #e5e7eb;
-        }
-        .footer-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 40px;
-        }
-        .footer-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: #374151;
-            margin-bottom: 8px;
-        }
-        .footer-text {
-            font-size: 13px;
-            color: #6b7280;
-        }
-        .bank-details {
-            background: #fff;
-            padding: 16px;
-            border-radius: 8px;
-            border: 1px solid #e5e7eb;
-            margin-top: 10px;
-        }
-        .bank-details p {
-            font-size: 12px;
-            margin-bottom: 4px;
-            font-family: monospace;
-        }
-        .print-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #0d9488;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
-        }
-        .print-btn:hover {
-            background: #0f766e;
-        }
-        @media print {
-            .print-btn { display: none; }
-            body { padding: 0; }
-            .invoice-container { border: none; }
+            text-align: center;
+            margin-top: 50px;
         }
     </style>
 </head>
 <body>
-    <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    <table style="width: 100%; margin-bottom: 40px;">
+        <tr>
+            <td style="width: 33%; text-align: left; vertical-align: top;">
+                <img src="https://healthmitraus.com/logo.jpg" alt="HealthMitra Logo" style="max-height: 80px;" onerror="this.style.display='none'; this.parentNode.innerHTML='<div style=\'font-size: 28px; font-weight: bold; color: #0d9488;\'>HealthMitra</div><div style=\'font-size: 14px; opacity: 0.8;\'>Healthcare Pvt. Ltd.</div>'" />
+            </td>
+            <td style="width: 33%; text-align: center; vertical-align: middle;">
+                <div class="title" style="margin-bottom: 0;">${title}</div>
+            </td>
+            <td style="width: 33%;"></td>
+        </tr>
+    </table>
     
-    <div class="invoice-container">
-        <div class="header">
-            <div class="logo">
-                <div class="logo-icon">H</div>
-                <div>
-                    <div style="font-size: 22px;">HealthMitra</div>
-                    <div style="font-size: 11px; opacity: 0.8;">Healthcare Pvt. Ltd.</div>
-                </div>
-            </div>
-            <div class="invoice-title">
-                <h1>INVOICE</h1>
-                <p>Tax Invoice for Membership Purchase</p>
-                <div class="invoice-number">${invoice.invoice_number}</div>
-            </div>
-        </div>
-        
-        <div class="body">
-            <div class="info-grid">
-                <div class="section">
-                    <div class="section-title">Bill To</div>
-                    <div class="info-item">
-                        <div class="info-label">Name</div>
-                        <div class="info-value">${purchase.full_name || 'Customer'}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Email</div>
-                        <div class="info-value">${invoice.email || 'customer@email.com'}</div>
-                    </div>
-                </div>
-                <div class="section">
-                    <div class="section-title">Invoice Details</div>
-                    <div class="info-item">
-                        <div class="info-label">Invoice Date</div>
-                        <div class="info-value">${invoiceDate}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Payment Status</div>
-                        <div class="info-value"><span class="status-badge">✓ ${(invoice.status || 'PAID').toUpperCase()}</span></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Transaction ID</div>
-                        <div class="info-value" style="font-family: monospace; font-size: 12px;">${invoice.transaction_id || 'N/A'}</div>
-                    </div>
-                </div>
-            </div>
-            
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Description</th>
-                        <th>Plan Details</th>
-                        <th class="text-right">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>
-                            <strong>${invoice.plan_name || 'Health Plan'}</strong><br>
-                            <span style="color: #6b7280; font-size: 13px;">1 Year Membership</span>
-                        </td>
-                        <td>
-                            <div style="font-size: 13px;">
-                                <div>Coverage: $${(purchase.coverage_amount || 0).toLocaleString('en-IN')}</div>
-                                <div>Card ID: ${purchase.card_unique_id || 'N/A'}</div>
-                            </div>
-                        </td>
-                        <td class="text-right font-bold">$${Number(invoice.amount || 0).toLocaleString('en-US')}</td>
-                    </tr>
-                </tbody>
-            </table>
-            
-            <div class="totals">
-                <div class="totals-table">
-                    <div class="totals-row">
-                        <span>Subtotal</span>
-                        <span>$${Number(invoice.amount || 0).toLocaleString('en-US')}</span>
-                    </div>
-                    {/* GST Row Removed for US Localization */}
-                    <div class="totals-row">
-                        <span>Total</span>
-                        <span>$${totalAmount.toLocaleString('en-US')}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <div class="footer-grid">
-                <div>
-                    <div class="footer-title">India Office</div>
-                    <div class="footer-text">
-                        HealthMitra Systems AI Pvt Ltd<br>
-                        C/O JSS Academy of Technical Education<br>
-                        C-20/1, Sector 62, Noida<br>
-                        Uttar Pradesh 201309, India<br>
-                        Phone: +91 9818823106
-                    </div>
-                </div>
-                <div>
-                    <div class="footer-title">USA Office</div>
-                    <div class="footer-text">
-                        1550 Sheridan Drive, Buffalo<br>
-                        NY 14217, United States<br>
-                        Phone: 716-579-0346<br>
-                        Email: service@HealthMitraus.com
-                    </div>
-                </div>
-            </div>
-            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px dashed #d1d5db; text-align: center;">
-                <p style="font-size: 12px; color: #9ca3af;">Thank you for choosing HealthMitra! This is a computer-generated invoice and does not require a signature.</p>
-            </div>
+    <div class="flex-between">
+        <div>Date: ${invoiceDate}</div>
+        <div>Receipt No: <strong>${invoice.invoice_number}</strong></div>
+    </div>
+    
+    <div class="patient-info">
+        <p>To,</p>
+        <p><strong>${patientName}</strong>,</p>
+        <p><strong>C/o-</strong>${patientAddress}</p>
+    </div>
+    
+    <div class="certification">
+        This is to certify that we have received the sum of $${amount.toFixed(2)} (Dollars ${amountInWords} only) For Preventive Health Membership plan and your HEALTHMITRA HEALTH ID IS. Receipt No: <strong>${invoice.invoice_number}</strong>.
+    </div>
+    
+    <div class="plan-details">
+        <div>PLAN NAME</div><div>:</div><div>${invoice.plan_name || 'HEALTH PLAN'}</div>
+        <div>PLAN AMOUNT</div><div>:</div><div>$${amount}</div>
+        <div>VALIDITY</div><div>:</div><div>${validity}</div>
+        <div>TERM</div><div>:</div><div>${term.padStart(2, '0')} YEARS.</div>
+    </div>
+    
+    ${!isInvoice ? `
+    <div class="tax-paragraph">
+        HealthMitra Preventive Health Care Membership Plan Member can claim deduction to the extent of $5000 or the plan amount paid (whichever is lower) for their preventive health checkup service under the section 80D of the income tax Act,1961 by the finance Act,2012. Tax Benefits are subject to changes in the tax laws Please consult your tax advisor for more details. The benefit of section 80D is over and above the limit of $150,000 prescribed under section 80C/80CCC.
+    </div>
+    ` : ''}
+    
+    <div class="footer">
+        <p style="margin-bottom: 20px;">The above receipt is computer generated and does not require any stamp or signatures.</p>
+        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;" />
+        <div style="text-align: left; font-size: 14px; line-height: 1.8;">
+            <p><strong>Address:</strong> 1550 Sheridan Drive, Buffalo, NY 14217, United States</p>
+            <p><strong>Email Id:</strong> service@healthmitraus.com</p>
+            <p><strong>Website:</strong> www.healthmitraus.com</p>
+            <p><strong>Contact :</strong> +1 716-579-0346</p>
         </div>
     </div>
 </body>
@@ -404,7 +207,7 @@ async function generateInvoice(supabase: any, userId: string, data: any) {
 
         // Build invoice from invoice table
         const invoice = invoiceData;
-        const htmlContent = generateHTMLInvoice(invoice, { full_name: 'Customer', coverage_amount: 0, card_unique_id: 'N/A' });
+        const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { full_name: 'Customer', coverage_amount: 0, card_unique_id: 'N/A' }, true);
         return NextResponse.json({
             success: true,
             data: {
@@ -426,8 +229,69 @@ async function generateInvoice(supabase: any, userId: string, data: any) {
         created_at: purchaseData.created_at,
     };
 
-    const htmlContent = generateHTMLInvoice(invoice, purchaseData);
+    const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, purchaseData, true);
     const filename = `${invoice.invoice_number || 'Invoice'}.html`;
+
+    return NextResponse.json({
+        success: true,
+        data: {
+            content: htmlContent,
+            filename: filename,
+            type: 'html',
+        }
+    });
+}
+
+async function generateReceipt(supabase: any, userId: string, data: any) {
+    const { purchaseId } = data;
+
+    // IDOR Protection: Verify user owns this purchase
+    const { data: purchaseData, error: purchaseError } = await supabase
+        .from('ecard_members')
+        .select('*, plan:plan_id(*)')
+        .eq('id', purchaseId)
+        .eq('user_id', userId)
+        .single();
+
+    if (purchaseError || !purchaseData) {
+        // Check invoices table
+        const { data: invoiceData } = await supabase
+            .from('invoices')
+            .select('*')
+            .eq('id', purchaseId)
+            .eq('user_id', userId)
+            .single();
+
+        if (!invoiceData) {
+            return NextResponse.json({ success: false, error: 'Purchase not found or access denied' }, { status: 404 });
+        }
+
+        // Build receipt from invoice table
+        const invoice = invoiceData;
+        const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { full_name: 'Customer', coverage_amount: 0, card_unique_id: 'N/A' }, false);
+        return NextResponse.json({
+            success: true,
+            data: {
+                content: htmlContent,
+                filename: `Receipt-${invoice.invoice_number || 'Payment'}.html`,
+                type: 'html',
+            }
+        });
+    }
+
+    // Build receipt from purchase data
+    const invoice = {
+        id: purchaseData.id,
+        invoice_number: `INV-${purchaseData.id.slice(0, 8).toUpperCase()}`,
+        plan_name: purchaseData.plan?.name || 'Health Plan',
+        amount: purchaseData.plan?.price || 0,
+        status: purchaseData.status === 'active' ? 'PAID' : 'PENDING',
+        transaction_id: purchaseData.card_unique_id,
+        created_at: purchaseData.created_at,
+    };
+
+    const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, purchaseData, false);
+    const filename = `Receipt-${invoice.invoice_number || 'Payment'}.html`;
 
     return NextResponse.json({
         success: true,

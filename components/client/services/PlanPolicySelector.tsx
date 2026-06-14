@@ -15,6 +15,8 @@ export interface PolicyHolder {
     relation: string;
     photoUrl: string | null;
     memberId: string;
+    dob?: string | null;
+    contactNumber?: string | null;
 }
 
 export interface PlanContext {
@@ -58,12 +60,22 @@ export default function PlanPolicySelector({ requestedServiceType, onContextSele
                 const data = await res.json();
                 if (!data.success) { setError(data.error || 'Failed to load plans'); return; }
 
-                // Filter by allowed service type if provided
+                const universallyAllowed = ["companion", "bill_reimbursement", "general", "emergency"];
+                
                 let filtered: PlanContext[] = data.plans || [];
                 if (requestedServiceType) {
-                    filtered = filtered.filter(p => p.allowedServices.includes(requestedServiceType));
+                    filtered = filtered.filter(p => p.allowedServices.includes(requestedServiceType) || universallyAllowed.includes(requestedServiceType));
                 }
                 setPlans(filtered);
+
+                // If no plans found, but service is universally allowed, auto-bypass
+                if (filtered.length === 0 && requestedServiceType && universallyAllowed.includes(requestedServiceType)) {
+                    onContextSelected({
+                        plan: { memberId: 'none', planId: 'none', planName: 'General Request', cardUniqueId: 'N/A', validTill: '', allowedServices: [requestedServiceType], policyHolders: [] },
+                        policyHolder: { kycId: 'none', holderFullName: 'Myself', relation: 'Self', photoUrl: null, memberId: 'none' }
+                    });
+                    return;
+                }
 
                 // Auto-select if single plan
                 if (filtered.length === 1) {
@@ -93,6 +105,16 @@ export default function PlanPolicySelector({ requestedServiceType, onContextSele
         setSelectedHolder(null);
 
         if (plan.policyHolders.length === 0) {
+            // Check if service is universally allowed, allow bypass of KYC
+            const universallyAllowed = ["companion", "bill_reimbursement", "general", "emergency"];
+            if (requestedServiceType && universallyAllowed.includes(requestedServiceType)) {
+                 onContextSelected({ 
+                     plan, 
+                     policyHolder: { kycId: 'none', holderFullName: 'Myself', relation: 'Self', photoUrl: null, memberId: plan.memberId } 
+                 });
+                 return;
+            }
+            
             // Has plan but no KYC — stay on step 1, show gate
             return;
         }

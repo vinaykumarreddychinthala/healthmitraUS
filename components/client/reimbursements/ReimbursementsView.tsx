@@ -31,7 +31,7 @@ type StatusFilter = 'approved' | 'rejected' | 'pending' | 'under_review';
 
 export function ReimbursementsView({ initialClaims }: ReimbursementsViewProps) {
     const claims = initialClaims || [];
-    const { kycSubmitted, checking } = useKYCStatus();
+    const { kycSubmitted, verifiedCount, checking } = useKYCStatus();
 
     const [selectedStatuses, setSelectedStatuses] = useState<StatusFilter[]>([]);
     const [searchQuery, setSearchQuery] = useState('');

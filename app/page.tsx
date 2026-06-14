@@ -29,6 +29,14 @@ import {
 import Image from "next/image";
 import { Testimonials } from "@/components/testimonials";
 
+const SYSTEM_SERVICES_MAP: Record<string, string> = {
+  ambulance: 'Ambulance',
+  medical_consultation: 'Doctor Consultation',
+  diagnostic: 'Lab Tests / Diagnostic',
+  caretaker: 'Caretaker',
+  nursing: 'Nursing',
+};
+
 async function getHomepageData() {
   const supabase = await createClient();
 
@@ -81,12 +89,13 @@ async function getHomepageData() {
 
 async function getPlans() {
   const supabase = await createClient();
+  // Fix: use status='active' to match all other pages (was is_active=true)
+  // Fix: removed .limit(3) so all active plans show, consistent with /plans and /shop/plans
   const { data } = await supabase
     .from("plans")
     .select("*")
-    .eq("is_active", true)
-    .order("price", { ascending: true })
-    .limit(3);
+    .eq("status", "active")
+    .order("price", { ascending: true });
   return data || [];
 }
 
@@ -208,12 +217,7 @@ export default async function Home() {
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div className="space-y-8">
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-teal-50 rounded-full border border-teal-100">
-                  <span className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></span>
-                  <span className="text-sm font-semibold text-teal-700">
-                    Trusted by 50,000+ Families
-                  </span>
-                </div>
+
 
                 <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-900 tracking-tight leading-[1.1]">
                   Complete <span className="text-teal-600">Healthcare</span> for
@@ -377,12 +381,17 @@ export default async function Home() {
 
             <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
               {plans.length > 0 ? (
-                plans.map((plan, idx) => (
+                plans.map((plan) => {
+                  // Fix: merge allowed_services + features (same as /plans/[slug] detail page)
+                  const services = (plan.allowed_services || []).map((s: string) => SYSTEM_SERVICES_MAP[s] || s);
+                  const allFeatures = Array.from(new Set([...services, ...(plan.features || [])]));
+                  return (
                   <Card
                     key={plan.id}
-                    className={`relative overflow-hidden border-2 ${idx === 1 ? "border-teal-500 shadow-xl shadow-teal-100" : "border-slate-200"} hover:border-teal-300 transition-all`}
+                    className={`relative overflow-hidden border-2 ${plan.is_featured ? "border-teal-500 shadow-xl shadow-teal-100" : "border-slate-200"} hover:border-teal-300 transition-all`}
                   >
-                    {idx === 1 && (
+                    {/* Fix: use is_featured from DB instead of hardcoded idx===1 */}
+                    {plan.is_featured && (
                       <div className="absolute top-0 right-0 bg-teal-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
                         POPULAR
                       </div>
@@ -392,8 +401,8 @@ export default async function Home() {
                         {plan.name}
                       </h3>
                       <div className="text-slate-500 mb-6 text-sm text-left space-y-1 mx-auto max-w-[280px]">
-                        {parseDescriptionPoints(plan.description || "Comprehensive coverage for your family").map((point, idx) => (
-                          <div key={idx} className="flex items-start gap-2">
+                        {parseDescriptionPoints(plan.description || "Comprehensive coverage for your family").map((point, i) => (
+                          <div key={i} className="flex items-start gap-2">
                             <span className="text-teal-500 select-none mt-1 shrink-0">•</span>
                             <span>{point}</span>
                           </div>
@@ -406,21 +415,19 @@ export default async function Home() {
                         <span className="text-slate-500">/year</span>
                       </div>
                       <ul className="space-y-3 mb-8">
-                        {(plan.features || [])
-                          .slice(0, 4)
-                          .map((feature: string, i: number) => (
-                            <li
-                              key={i}
-                              className="flex items-center gap-2 text-sm text-slate-600"
-                            >
-                              <CheckCircle2 className="w-4 h-4 text-teal-500" />
-                              {feature}
-                            </li>
-                          ))}
+                        {allFeatures.map((feature: string, i: number) => (
+                          <li
+                            key={i}
+                            className="flex items-center gap-2 text-sm text-slate-600"
+                          >
+                            <CheckCircle2 className="w-4 h-4 text-teal-500" />
+                            {feature}
+                          </li>
+                        ))}
                       </ul>
                       <Link href={`/checkout-auth/${plan.id}`} className="block">
                         <Button
-                          className={`w-full ${idx === 1 ? "bg-teal-600 hover:bg-teal-700" : "bg-slate-900 hover:bg-slate-800"}`}
+                          className={`w-full ${plan.is_featured ? "bg-teal-600 hover:bg-teal-700" : "bg-slate-900 hover:bg-slate-800"}`}
                         >
                           Get Started
                           <ArrowUpRight className="ml-2 w-4 h-4" />
@@ -428,7 +435,8 @@ export default async function Home() {
                       </Link>
                     </CardContent>
                   </Card>
-                ))
+                  );
+                })
               ) : (
                 <div className="col-span-3 text-center py-12 text-slate-500">
                   No plans available at the moment.

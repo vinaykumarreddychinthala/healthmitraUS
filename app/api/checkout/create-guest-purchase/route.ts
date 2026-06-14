@@ -1,54 +1,25 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { sendMail } from '@/lib/email';
+import { 
+    planPurchaseConfirmationTemplate,
+    confirmationOfPlanPurchaseTemplate,
+    paymentReceiptTemplate
+} from '@/lib/email-templates';
 import { validatePromoCode } from '@/app/actions/coupons';
+import { sendPlanPurchaseWhatsApp } from '@/lib/whatsapp';
 
-const paymentReceiptTemplate = ({ name, planName, amount, transactionId, date }: any) => `
-<div style="font-family:sans-serif;max-width:600px;margin:auto;padding:20px;">
-  <h2 style="color:#0891b2;border-bottom:2px solid #e2e8f0;padding-bottom:10px;">Payment Receipt</h2>
-  <p>Hey <strong>${name}</strong>,</p>
-  <p>Thank you for purchasing a Preventive Health Plan with HealthMitra.</p>
-  <table style="width:100%;border-collapse:collapse;margin:15px 0;">
-    <tr><td style="padding:8px 0;color:#64748b;">Plan</td><td style="padding:8px 0;font-weight:bold;">${planName}</td></tr>
-    <tr><td style="padding:8px 0;color:#64748b;">Amount Paid</td><td style="padding:8px 0;font-weight:bold;">$${amount}</td></tr>
-    <tr><td style="padding:8px 0;color:#64748b;">Transaction ID</td><td style="padding:8px 0;">${transactionId}</td></tr>
-    <tr><td style="padding:8px 0;color:#64748b;">Date</td><td style="padding:8px 0;">${date}</td></tr>
-  </table>
-  <p>Regards,<br/><strong>HealthMitra Team</strong></p>
-</div>
-`;
+/** Generate a unique Member ID: MEM-XXXXX (5 random digits) */
+function generateMemberId(): string {
+    const digits = Math.floor(10000 + Math.random() * 90000); // always 5 digits
+    return `MEM-${digits}`;
+}
 
-const welcomeTemplate = ({ name, userId, password, planName, amount, transactionId }: any) => `
-<div style="font-family:sans-serif;max-width:600px;margin:auto;padding:20px;">
-  <div style="background:linear-gradient(135deg,#0891b2,#0e7490);padding:20px;border-radius:12px;text-align:center;margin-bottom:20px;">
-    <h1 style="color:white;margin:0;font-size:24px;">Welcome to HealthMitra!</h1>
-  </div>
-  <p>Dear <strong>${name}</strong>,</p>
-  <p>Your purchase of <strong>${planName}</strong> is confirmed. Thank you for choosing HealthMitra!</p>
-  <table style="width:100%;border-collapse:collapse;margin:10px 0 20px;">
-    <tr><td style="padding:6px 0;color:#64748b;">Transaction ID</td><td style="padding:6px 0;">${transactionId}</td></tr>
-    <tr><td style="padding:6px 0;color:#64748b;">Amount</td><td style="padding:6px 0;font-weight:bold;">$${amount}</td></tr>
-  </table>
-  <div style="background:#f0fdf4;border:2px solid #22c55e;border-radius:10px;padding:20px;margin:20px 0;">
-    <p style="margin:0 0 8px 0;font-weight:bold;color:#16a34a;font-size:16px;">🔑 Your Login Credentials</p>
-    <p style="margin:0 0 6px 0;color:#374151;">Use these to access your Customer Dashboard:</p>
-    <table style="width:100%;margin-top:10px;">
-      <tr>
-        <td style="padding:8px;background:#fff;border-radius:6px;font-weight:bold;color:#64748b;width:100px;">User ID</td>
-        <td style="padding:8px;background:#fff;border-radius:6px;font-size:18px;font-weight:bold;color:#0891b2;letter-spacing:2px;">${userId}</td>
-      </tr>
-      <tr><td colspan="2" style="height:6px;"></td></tr>
-      <tr>
-        <td style="padding:8px;background:#fff;border-radius:6px;font-weight:bold;color:#64748b;">Password</td>
-        <td style="padding:8px;background:#fff;border-radius:6px;font-size:18px;font-weight:bold;color:#0891b2;letter-spacing:2px;">${password}</td>
-      </tr>
-    </table>
-    <p style="margin:12px 0 0 0;font-size:12px;color:#6b7280;">Please save these credentials securely. You can change your password after logging in.</p>
-  </div>
-  <p>Visit <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://healthmitraus.com'}/login" style="color:#0891b2;">your dashboard</a> to manage your membership and download your e-card.</p>
-  <p>Warm regards,<br/><strong>Team HealthMitra</strong></p>
-</div>
-`;
+/** Generate a unique Policy ID: POL-XXXXXXX (7 random digits) */
+function generatePolicyId(): string {
+    const digits = Math.floor(1000000 + Math.random() * 9000000); // always 7 digits
+    return `POL-${digits}`;
+}
 
 export async function POST(request: Request) {
     try {
@@ -154,6 +125,7 @@ export async function POST(request: Request) {
         expiryDate.setDate(expiryDate.getDate() + (plan.duration_days || 365));
 
         const cardId = isFirstTimeUser ? generatedUserId : `HM${Date.now()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+        const policyId = generatePolicyId();
 
         const { data: member, error: memberError } = await adminClient
             .from('ecard_members')
@@ -167,6 +139,7 @@ export async function POST(request: Request) {
                 valid_till: expiryDate.toISOString().split('T')[0],
                 coverage_amount: plan.coverage_amount || plan.price * 100,
                 card_unique_id: cardId,
+                member_id_code: generateMemberId(),
             })
             .select().single();
 
@@ -191,6 +164,7 @@ export async function POST(request: Request) {
                     valid_till: expiryDate.toISOString().split('T')[0],
                     coverage_amount: plan.coverage_amount || plan.price * 100,
                     card_unique_id: familyCardId,
+                    member_id_code: generateMemberId(),
                 });
             }
             const { error: familyError } = await adminClient.from('ecard_members').insert(familyMembersToInsert);
@@ -211,6 +185,7 @@ export async function POST(request: Request) {
             plan_id: planId,
             plan_name: plan.name,
             card_unique_id: cardId,
+            policy_id: policyId,
             amount_paid: finalAmount,
             currency: 'USD',
             payment_method: paymentMethod,
@@ -255,20 +230,74 @@ export async function POST(request: Request) {
         });
 
         // Send emails
-        const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-        await sendMail({
-            to: email,
-            subject: `Payment Receipt — ${plan.name}`,
-            html: paymentReceiptTemplate({ name, planName: plan.name, amount: finalAmount, transactionId: finalTransactionId, date: today })
-        });
+        if (email) {
+            const gatewayName = paymentMethod === 'razorpay' ? 'Razorpay' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'stripe' ? 'Stripe' : 'EasePay';
+            
+            // Construct plan details page URL
+            const host = request.headers.get('host') || 'healthmitra.co.in';
+            const protocol = request.headers.get('x-forwarded-proto') || 'https';
+            const domain = `${protocol}://${host}`;
+            const planUrl = plan.slug ? `${domain}/plans/${plan.slug}` : `${domain}/plans`;
 
-        if (isFirstTimeUser) {
+            if (isFirstTimeUser) {
+                await sendMail({
+                    to: email,
+                    subject: `Welcome to HealthMitra - Your ${plan.name} Membership Details`,
+                    devData: { 'User ID': email, 'Password': generatedPassword, 'Email': email },
+                    html: planPurchaseConfirmationTemplate({
+                        customerName: name,
+                        userId: email,
+                        password: generatedPassword,
+                        planName: plan.name,
+                        transactionId: finalTransactionId || 'N/A',
+                        amount: finalAmount,
+                        partnerName: gatewayName,
+                        planUrl
+                    })
+                });
+            } else {
+                await sendMail({
+                    to: email,
+                    subject: `Confirmation of Your HealthMitra Plan Purchase`,
+                    devData: { 'Email': email, 'Note': 'Existing user — password unchanged' },
+                    html: confirmationOfPlanPurchaseTemplate({
+                        planName: plan.name,
+                        planUrl
+                    })
+                });
+            }
+
+            // Send Payment Receipt
             await sendMail({
                 to: email,
-                subject: `Welcome to HealthMitra — Your Login Credentials`,
-                devData: { 'User ID': generatedUserId, 'Password': generatedPassword, 'Email': email },
-                html: welcomeTemplate({ name, userId: generatedUserId, password: generatedPassword, planName: plan.name, amount: finalAmount, transactionId: finalTransactionId })
+                subject: `Payment Receipt for ${plan.name} - HealthMitra`,
+                html: paymentReceiptTemplate({
+                    customerName: name,
+                    customerPhone: phone || '',
+                    customerEmail: email,
+                    transactionId: finalTransactionId || 'N/A',
+                    date: new Date().toLocaleDateString(),
+                    planName: plan.name,
+                    amount: finalAmount
+                })
             });
+
+            // Send WhatsApp confirmation (non-blocking — failure won't affect purchase)
+            if (phone) {
+                const planUrl = plan.slug ? `${domain}/plans/${plan.slug}` : `${domain}/plans`;
+                sendPlanPurchaseWhatsApp({
+                    name,
+                    phone,
+                    email,
+                    planUrl,
+                }).then(result => {
+                    if (!result.success) {
+                        console.warn('[WhatsApp] Plan purchase notification failed:', result.error);
+                    }
+                }).catch(err => {
+                    console.error('[WhatsApp] Unexpected error sending plan purchase message:', err);
+                });
+            }
         }
 
         return NextResponse.json({

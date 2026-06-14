@@ -10,7 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, CreditCard, Shield, Loader2, ArrowLeft, AlertCircle, Star, Lock, Zap, User, Mail, Phone, Tag } from 'lucide-react';
+import {
+    CheckCircle, CreditCard, Shield, Loader2, ArrowLeft, AlertCircle,
+    Star, Lock, Zap, User, Mail, Phone, Tag, ChevronDown, ChevronUp,
+    Globe, MapPin,
+} from 'lucide-react';
 import { loadRazorpay } from '@/lib/razorpay';
 import { toast } from 'sonner';
 import { validatePromoCode } from '@/app/actions/coupons';
@@ -26,10 +30,31 @@ interface Plan {
 }
 interface GuestInfo { name: string; email: string; phone: string; planId: string; verified: boolean; }
 
-const SERVICE_LABELS: Record<string, string> = {
-    ambulance: 'Ambulance', medical_consultation: 'Doctor Consultation',
-    diagnostic: 'Lab Tests / Diagnostic', caretaker: 'Caretaker', nursing: 'Nursing',
+// Feature detail descriptions for dropdown tooltips
+const FEATURE_DETAILS: Record<string, { label: string; detail: string }> = {
+    ambulance: {
+        label: 'Ambulance',
+        detail: '24/7 emergency ambulance dispatch. Includes air and ground ambulance coverage with priority response for cardiac, trauma, and critical emergencies. No co-pay for network ambulances.',
+    },
+    medical_consultation: {
+        label: 'Doctor Consultation – 50% Discount',
+        detail: 'Get 50% off on all doctor consultations including specialist visits, follow-ups, and tele-consultations. Valid at 2,000+ empanelled doctors and clinics. Discount applies automatically at point of service. Includes unlimited text-based follow-up for 48 hours post consultation.',
+    },
+    diagnostic: {
+        label: 'Lab Tests / Diagnostic',
+        detail: 'Discounted lab tests at 500+ partner diagnostic centres. Covers blood panels, imaging (X-ray, MRI, CT scan), pathology, and preventive health check-ups. Home sample collection available in select cities.',
+    },
+    caretaker: {
+        label: 'Caretaker Service',
+        detail: 'Trained and verified caretakers available for post-surgery recovery, elderly care, or chronic illness management. Provided by certified caregiving professionals. Available for 4–12 hour shifts.',
+    },
+    nursing: {
+        label: 'Nursing at Home',
+        detail: 'Qualified registered nurses for at-home medication administration, wound dressing, IV therapy, and daily vitals monitoring. Ideal for post-hospitalisation care.',
+    },
 };
+
+type CountryMode = 'us' | 'india';
 
 export default function CheckoutPage({ params }: { params: Promise<{ plan: string }> }) {
     const { plan: planId } = use(params);
@@ -46,13 +71,20 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
     const [stripeSettings, setStripeSettings] = useState({ enabled: false, publishableKey: '', clientSecret: '' });
     const [promoCode, setPromoCode] = useState('');
     const [referralCode, setReferralCode] = useState('');
-    const [promoTab, setPromoTab] = useState<'coupon' | 'referral'>('coupon');
+    const [referralSaved, setReferralSaved] = useState(false);
     const [appliedCode, setAppliedCode] = useState<{ code: string; discount: number; type: string } | null>(null);
     const [validatingCode, setValidatingCode] = useState(false);
-    const [purchaseSuccess, setPurchaseSuccess] = useState<{ email: string } | null>(null);
+    const [purchaseSuccess, setPurchaseSuccess] = useState<{
+        email: string; name: string; phone: string;
+        planName: string; transactionId: string; amount: number;
+        basePrice: number; discountAmt: number; taxAmount: number;
+        paymentDate: string;
+    } | null>(null);
     const [editName, setEditName] = useState('');
     const [editEmail, setEditEmail] = useState('');
     const [editPhone, setEditPhone] = useState('');
+    const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
+    const [countryMode, setCountryMode] = useState<CountryMode>('us');
 
     const [otpStep, setOtpStep] = useState(1);
     const [newEmailOtp, setNewEmailOtp] = useState('');
@@ -60,7 +92,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
     const [turnstileToken, setTurnstileToken] = useState<string>('');
 
     useEffect(() => {
-        // Read guest info from sessionStorage (set by checkout-auth page)
         const stored = sessionStorage.getItem('checkout_user');
         if (!stored) {
             toast.error('Please verify your email first.');
@@ -104,13 +135,28 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
         load();
     }, [planId, router]);
 
-    // Show in-page success screen instead of immediate redirect
-    const onPurchaseSuccess = (_result: any) => {
+    const onPurchaseSuccess = (result: { success: boolean; data?: { planName?: string; amount?: number; transactionId?: string } }) => {
         sessionStorage.removeItem('checkout_user');
-        setPurchaseSuccess({ email: editEmail });
+        const d = result?.data || {};
+        const base = plan?.price || 0;
+        const disc = appliedCode?.discount || 0;
+        const indiaMode = countryMode === 'india';
+        const tax = indiaMode ? Math.round((base - disc) * 0.18) : 0;
+        const computedTotal = (base - disc) + tax;
+        setPurchaseSuccess({
+            email: editEmail,
+            name: editName,
+            phone: editPhone,
+            planName: d.planName || plan?.name || '',
+            transactionId: d.transactionId || '',
+            amount: d.amount ?? computedTotal,
+            basePrice: base,
+            discountAmt: disc,
+            taxAmount: tax,
+            paymentDate: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }),
+        });
     };
 
-    // Central purchase handler — uses editable user fields + referral code
     const callGuestPurchase = async (paymentMethod: string, transactionId?: string) => {
         if (!plan || !guestInfo) return null;
         const res = await fetch('/api/checkout/create-guest-purchase', {
@@ -139,8 +185,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
         script.src = `${sdkBase}/sdk/js?client-id=${paypalSettings.clientId}&currency=USD&components=buttons`;
         script.async = true;
         script.onload = () => {
-            if (!paypalRef.current || !(window as any).paypal) return;
-            (window as any).paypal.Buttons({
+            if (!paypalRef.current || !(window as Window & { paypal?: { Buttons: (opts: unknown) => { render: (el: HTMLElement) => void } } }).paypal) return;
+            (window as Window & { paypal?: { Buttons: (opts: unknown) => { render: (el: HTMLElement) => void } } }).paypal!.Buttons({
                 style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'pay', height: 45 },
                 createOrder: async () => {
                     const res = await fetch('/api/paypal/create-order', {
@@ -151,10 +197,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                     if (!d.success) throw new Error(d.error);
                     return d.data.orderId;
                 },
-                onApprove: async (data: any) => {
+                onApprove: async (data: { orderID: string }) => {
                     setProcessing(true);
                     try {
-                        // Capture via PayPal, then record purchase via guest endpoint
                         const captureRes = await fetch('/api/paypal/capture-order', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ paypalOrderId: data.orderID, planId: plan.id, promoCode: appliedCode?.code }),
@@ -169,7 +214,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                 },
                 onError: () => toast.error('PayPal payment failed'),
                 onCancel: () => toast.info('Payment cancelled'),
-            }).render(paypalRef.current);
+            }).render(paypalRef.current!);
         };
         document.body.appendChild(script);
     }, [plan, paypalSettings]);
@@ -217,12 +262,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    email: editEmail,
-                    otp: newEmailOtp,
-                    hash: newEmailHash,
-                    name: editName,
-                    phone: editPhone,
-                    planId: plan?.id,
+                    email: editEmail, otp: newEmailOtp, hash: newEmailHash,
+                    name: editName, phone: editPhone, planId: plan?.id,
                 })
             });
             const data = await res.json();
@@ -259,7 +300,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                 key: orderData.data.keyId, amount: orderData.data.amount,
                 currency: orderData.data.currency, name: 'HealthMitra',
                 description: plan.name, order_id: orderData.data.orderId,
-                handler: async (response: any) => {
+                handler: async (response: { razorpay_payment_id: string }) => {
                     const result = await callGuestPurchase('razorpay', response.razorpay_payment_id);
                     if (result?.success) onPurchaseSuccess(result);
                     else toast.error(result?.error || 'Purchase failed');
@@ -287,6 +328,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
         else toast.error(res.message || 'Invalid promo code');
     };
 
+    const handleSaveReferral = () => {
+        if (referralCode.trim()) {
+            setReferralSaved(true);
+            toast.success('Referral code saved!');
+        }
+    };
+
     if (loading) return (
         <><Header /><div className="min-h-screen flex items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div><Footer /></>
     );
@@ -294,15 +342,24 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
 
     const discount = appliedCode?.discount || 0;
     const baseAfterDiscount = Math.max(0, plan.price - discount);
-    // India (Razorpay) → show ₹ with 18% GST. US (PayPal/Stripe) → show $ without tax
-    const isIndia = razorpaySettings.enabled && !paypalSettings.enabled && !stripeSettings.enabled;
+
+    // Country-mode pricing
+    const isIndia = countryMode === 'india';
     const gstAmount = isIndia ? Math.round(baseAfterDiscount * 0.18) : 0;
     const total = baseAfterDiscount + gstAmount;
-    const currency = isIndia ? '₹' : '$';
-    const anyLivePayment = razorpaySettings.enabled || paypalSettings.enabled || stripeSettings.enabled;
-    const stripePromise = stripeSettings.publishableKey ? loadStripe(stripeSettings.publishableKey) : null;
+    const currency = '$';
 
+    // Payment availability per country
+    const indiaPaymentAvailable = razorpaySettings.enabled;
+    const usPaymentAvailable = paypalSettings.enabled || stripeSettings.enabled;
+    const anyLivePayment = isIndia ? indiaPaymentAvailable : usPaymentAvailable;
+
+    const stripePromise = stripeSettings.publishableKey ? loadStripe(stripeSettings.publishableKey) : null;
     const isEmailChanged = guestInfo && editEmail !== guestInfo.email;
+
+    const toggleFeature = (serviceId: string) => {
+        setExpandedFeature(prev => prev === serviceId ? null : serviceId);
+    };
 
     return (
         <>
@@ -312,34 +369,104 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
 
                     {/* ── SUCCESS SCREEN ──────────────────────────────────────── */}
                     {purchaseSuccess ? (
-                        <div className="max-w-lg mx-auto py-16 text-center space-y-6 animate-in fade-in-50">
-                            <div className="flex items-center justify-center">
-                                <div className="w-24 h-24 rounded-full bg-emerald-100 flex items-center justify-center">
-                                    <CheckCircle className="w-14 h-14 text-emerald-500" />
+                        <div className="max-w-2xl mx-auto py-8 animate-in fade-in-50">
+                            {/* Confetti header */}
+                            <div className="text-center mb-8">
+                                <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+                                    <CheckCircle className="w-12 h-12 text-emerald-500" />
                                 </div>
+                                <h2 className="text-3xl font-bold text-slate-900 mb-1">Payment Successful! 🎉</h2>
+                                <p className="text-slate-500">Thank you for choosing HealthMitra</p>
                             </div>
-                            <div>
-                                <h2 className="text-3xl font-bold text-slate-900 mb-2">Payment Successful! 🎉</h2>
-                                <p className="text-slate-600 text-lg">Welcome to HealthMitra</p>
-                            </div>
-                            <div className="p-5 bg-teal-50 border border-teal-200 rounded-2xl text-left space-y-2">
-                                <p className="font-semibold text-teal-800">Your login credentials have been sent to:</p>
-                                <p className="text-teal-700 font-mono text-sm break-all">{purchaseSuccess.email}</p>
-                                <p className="text-sm text-teal-600 mt-2">Check your inbox for your <strong>User ID</strong> and <strong>Password</strong> to access the Customer Portal.</p>
-                            </div>
-                            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-                                <button
-                                    onClick={() => router.push('/login')}
-                                    className="flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-8 py-3 rounded-xl transition-all"
-                                >
-                                    Login to Customer Portal
-                                </button>
-                                <button
-                                    onClick={() => router.push('/')}
-                                    className="flex items-center justify-center gap-2 border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium px-8 py-3 rounded-xl transition-all"
-                                >
-                                    Back to Home
-                                </button>
+
+                            {/* Receipt card */}
+                            <div className="bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
+                                {/* Receipt header */}
+                                <div className="bg-gradient-to-r from-teal-600 to-cyan-600 px-8 py-6 text-white">
+                                    <p className="text-teal-100 text-sm font-medium uppercase tracking-wider mb-1">Payment Receipt</p>
+                                    <h3 className="text-xl font-bold">Hey, {purchaseSuccess.name}.</h3>
+                                    <p className="text-teal-100 text-sm mt-1">Thank you for Purchasing your Preventive Health Plan from us — we&apos;re glad you did.</p>
+                                    <p className="text-teal-100 text-sm mt-1">An Email has been sent to your registered Email ID with your User ID and Password. Kindly update the same.</p>
+                                </div>
+
+                                {/* Payment No + Date */}
+                                <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
+                                    <div className="px-6 py-4">
+                                        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">Payment No.</p>
+                                        <p className="font-mono font-semibold text-slate-800 text-sm break-all">{purchaseSuccess.transactionId}</p>
+                                    </div>
+                                    <div className="px-6 py-4">
+                                        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">Payment Date</p>
+                                        <p className="font-semibold text-slate-800 text-sm">{purchaseSuccess.paymentDate}</p>
+                                    </div>
+                                </div>
+
+                                {/* Client + Payment To */}
+                                <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
+                                    <div className="px-6 py-4">
+                                        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2">Client</p>
+                                        <p className="font-semibold text-slate-800">{purchaseSuccess.name}</p>
+                                        <p className="text-sm text-slate-500 mt-0.5">{purchaseSuccess.phone}</p>
+                                        <p className="text-sm text-slate-500 break-all">{purchaseSuccess.email}</p>
+                                    </div>
+                                    <div className="px-6 py-4">
+                                        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2">Payment To</p>
+                                        <p className="font-semibold text-slate-800">HealthMitra Systems Pvt Ltd</p>
+                                        <p className="text-sm text-slate-500 mt-0.5">+91 9818823106</p>
+                                        <p className="text-sm text-slate-500">service@healthmitraus.com</p>
+                                    </div>
+                                </div>
+
+                                {/* Description table */}
+                                <div className="px-6 py-4">
+                                    <div className="flex justify-between py-2 border-b border-slate-100">
+                                        <p className="text-sm font-semibold text-slate-600">Description</p>
+                                        <p className="text-sm font-semibold text-slate-600">Amount</p>
+                                    </div>
+                                    <div className="flex justify-between py-3 border-b border-slate-100">
+                                        <p className="text-sm text-slate-700">{purchaseSuccess.planName}</p>
+                                        <p className="text-sm font-medium text-slate-800">${Number(purchaseSuccess.amount).toLocaleString()}</p>
+                                    </div>
+                                    <div className="space-y-2 py-3 border-b border-slate-100">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-slate-500">Basic Price</span>
+                                            <span className="text-slate-700">${Number(purchaseSuccess.basePrice).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-slate-500">Discount</span>
+                                            <span className="text-emerald-600">-${Number(purchaseSuccess.discountAmt).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-slate-500">Tax</span>
+                                            <span className="text-slate-700">${Number(purchaseSuccess.taxAmount).toLocaleString()}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-3">
+                                        <span className="font-bold text-slate-900 text-base">Total:</span>
+                                        <span className="font-bold text-teal-600 text-xl">${Number(purchaseSuccess.amount).toLocaleString()}</span>
+                                    </div>
+                                </div>
+
+                                {/* Email notice */}
+                                <div className="mx-6 mb-6 p-4 bg-teal-50 border border-teal-100 rounded-xl">
+                                    <p className="text-sm text-teal-700">📧 Login credentials have been sent to <strong className="font-semibold">{purchaseSuccess.email}</strong>. Check your inbox for your User ID &amp; Password.</p>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="px-6 pb-6 flex flex-col sm:flex-row gap-3">
+                                    <button
+                                        onClick={() => router.push('/login')}
+                                        className="flex-1 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-3 rounded-xl transition-all"
+                                    >
+                                        Login to Customer Portal
+                                    </button>
+                                    <button
+                                        onClick={() => router.push('/')}
+                                        className="flex-1 flex items-center justify-center gap-2 border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium px-6 py-3 rounded-xl transition-all"
+                                    >
+                                        Back to Home
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ) : (
@@ -352,66 +479,129 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                         <p className="text-slate-500 mt-1">Review your plan and complete payment</p>
                     </div>
 
+                    {/* ── COUNTRY SELECTOR ──────────────────────────────────── */}
+                    <div className="mb-6 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                        <p className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
+                            <Globe className="w-4 h-4 text-primary" /> Select your country for pricing &amp; payment
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setCountryMode('us')}
+                                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                                    countryMode === 'us'
+                                        ? 'border-primary bg-primary/5 text-primary'
+                                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                                }`}
+                            >
+                                <span className="text-lg">🇺🇸</span> United States (USD $)
+                            </button>
+                            <button
+                                onClick={() => setCountryMode('india')}
+                                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                                    countryMode === 'india'
+                                        ? 'border-primary bg-primary/5 text-primary'
+                                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                                }`}
+                            >
+                                <span className="text-lg">🇮🇳</span> India (USD $ + GST)
+                            </button>
+                        </div>
+                        {countryMode === 'india' && (
+                            <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                                <MapPin className="w-3 h-3 shrink-0" /> 18% GST will be applied to your order total as per Indian tax regulations.
+                            </p>
+                        )}
+                    </div>
+
                     <div className="grid lg:grid-cols-5 gap-8">
                         {/* LEFT: Plan Details */}
                         <div className="lg:col-span-3 space-y-4">
-                            {/* Plan Card */}
+
+                            {/* Plan Card — aligned */}
                             <Card className="border border-slate-200 shadow-sm overflow-hidden">
                                 <div className="h-1.5 bg-gradient-to-r from-primary to-cyan-400" />
                                 <CardHeader className="pb-3 pt-5">
                                     <div className="flex items-center justify-between">
                                         <CardTitle className="text-lg text-slate-800">Your Selected Plan</CardTitle>
-                                        {plan.is_featured && <Badge className="bg-amber-100 text-amber-700"><Star className="w-3 h-3 mr-1 fill-amber-500" /> Popular</Badge>}
+                                        {plan.is_featured && <Badge className="bg-amber-100 text-amber-700"><Star className="w-3 h-3 mr-1 fill-amber-500" />Popular</Badge>}
                                     </div>
                                 </CardHeader>
                                 <CardContent className="pt-0">
-                                    <div className="flex items-start gap-4 p-4 bg-primary/5 rounded-xl border border-primary/10">
-                                        <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
-                                            <Shield className="w-7 h-7 text-primary" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="font-bold text-slate-900 text-lg">{plan.name}</h3>
-                                            <div className="text-slate-500 text-sm mt-1.5 space-y-1">
-                                                {parseDescriptionPoints(plan.description).map((point, idx) => (
-                                                    <div key={idx} className="flex items-start gap-1.5">
-                                                        <span className="text-primary select-none mt-1 shrink-0">•</span>
-                                                        <span>{point}</span>
+                                    <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
+                                        {/* Plan name + price row */}
+                                        <div className="flex items-start justify-between gap-4 mb-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
+                                                    <Shield className="w-6 h-6 text-primary" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-slate-900 text-lg leading-tight">{plan.name}</h3>
+                                                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                        <Badge variant="outline" className="text-xs border-primary/30 text-primary">{plan.duration_days} days</Badge>
+                                                        {plan.coverage_amount && <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50">${Number(plan.coverage_amount).toLocaleString()} cover</Badge>}
                                                     </div>
-                                                ))}
+                                                </div>
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-2 mt-2">
-                                                <Badge variant="outline" className="text-xs border-primary/30 text-primary">{plan.duration_days} days</Badge>
-                                                {plan.coverage_amount && <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50">${Number(plan.coverage_amount).toLocaleString()} cover</Badge>}
+                                            <div className="text-right shrink-0">
+                                                <p className="text-2xl font-bold text-slate-900">{currency}{Number(plan.price).toLocaleString()}</p>
+                                                <p className="text-xs text-slate-400">base price</p>
                                             </div>
                                         </div>
-                                        <div className="text-right shrink-0">
-                                            <p className="text-2xl font-bold text-slate-900">${Number(plan.price).toLocaleString()}</p>
-                                            <p className="text-xs text-slate-400">base price</p>
+                                        {/* Description points */}
+                                        <div className="text-slate-500 text-sm space-y-1 pl-1">
+                                            {parseDescriptionPoints(plan.description).map((point, idx) => (
+                                                <div key={idx} className="flex items-start gap-1.5">
+                                                    <span className="text-primary select-none mt-1 shrink-0">•</span>
+                                                    <span>{point}</span>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </CardContent>
                             </Card>
 
-                            {/* Services */}
+                            {/* Included Services — with expandable dropdowns */}
                             {(plan.allowed_services || []).length > 0 && (
                                 <Card className="border border-slate-200 shadow-sm">
-                                    <CardHeader className="pb-3"><CardTitle className="text-base text-slate-800">What&apos;s Included</CardTitle></CardHeader>
-                                    <CardContent className="pt-0">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            {plan.allowed_services.map((s, i) => (
-                                                <div key={i} className="flex items-center gap-2.5 text-sm text-slate-600 py-1">
-                                                    <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                                                    </div>
-                                                    {SERVICE_LABELS[s] || s}
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="text-base text-slate-800">Plan Features</CardTitle>
+                                        <p className="text-xs text-slate-400 mt-0.5">Click any feature to learn more</p>
+                                    </CardHeader>
+                                    <CardContent className="pt-0 space-y-2">
+                                        {plan.allowed_services.map((s) => {
+                                            const feature = FEATURE_DETAILS[s];
+                                            const label = feature?.label || s;
+                                            const detail = feature?.detail;
+                                            const isOpen = expandedFeature === s;
+                                            return (
+                                                <div key={s} className="rounded-lg border border-slate-100 overflow-hidden">
+                                                    <button
+                                                        onClick={() => detail ? toggleFeature(s) : undefined}
+                                                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${detail ? 'hover:bg-slate-50 cursor-pointer' : 'cursor-default'} ${isOpen ? 'bg-primary/5' : 'bg-white'}`}
+                                                    >
+                                                        <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                                                        </div>
+                                                        <span className="flex-1 text-sm font-medium text-slate-700">{label}</span>
+                                                        {detail && (
+                                                            isOpen
+                                                                ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                                                                : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                                                        )}
+                                                    </button>
+                                                    {isOpen && detail && (
+                                                        <div className="px-4 py-3 bg-primary/5 border-t border-primary/10 text-sm text-slate-600 leading-relaxed">
+                                                            {detail}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            ))}
-                                        </div>
+                                            );
+                                        })}
                                     </CardContent>
                                 </Card>
                             )}
 
-                            {/* Price Breakdown — GST aware */}
+                            {/* Price Breakdown */}
                             <Card className="border border-slate-200 shadow-sm">
                                 <CardHeader className="pb-3"><CardTitle className="text-base text-slate-800">Price Breakdown</CardTitle></CardHeader>
                                 <CardContent className="pt-0 space-y-3">
@@ -440,38 +630,71 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                 </CardContent>
                             </Card>
 
-                            {/* Coupon Code / Referral Code Tabs */}
+                            {/* Coupon Code — vertical */}
                             <Card className="border border-slate-200 shadow-sm">
-                                <CardHeader className="pb-0 pt-4">
-                                    <div className="flex border-b border-slate-200">
-                                        {(['coupon', 'referral'] as const).map(tab => (
-                                            <button key={tab} onClick={() => setPromoTab(tab)}
-                                                className={`flex-1 py-2 text-sm font-semibold capitalize transition-all border-b-2 -mb-px ${promoTab === tab ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
-                                                {tab === 'coupon' ? 'Coupon Code' : 'Referral Code'}
-                                            </button>
-                                        ))}
-                                    </div>
+                                <CardHeader className="pb-2 pt-4">
+                                    <CardTitle className="text-base text-slate-800 flex items-center gap-2">
+                                        <Tag className="w-4 h-4 text-primary" /> Coupon Code
+                                    </CardTitle>
                                 </CardHeader>
-                                <CardContent className="pt-4">
-                                    {promoTab === 'coupon' ? (
-                                        !appliedCode ? (
-                                            <div className="flex gap-2">
-                                                <Input placeholder="Enter coupon code" value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())} disabled={validatingCode} />
-                                                <Button onClick={handleApplyPromo} disabled={validatingCode || !promoCode.trim()} variant="outline" className="shrink-0 border-primary text-primary hover:bg-primary/5">
-                                                    {validatingCode ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
-                                                </Button>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
-                                                <span className="text-sm font-bold text-emerald-700">{appliedCode.code} applied ✓</span>
-                                                <Button variant="ghost" size="sm" onClick={() => { setAppliedCode(null); setPromoCode(''); }} className="text-slate-400 hover:text-rose-500">Remove</Button>
-                                            </div>
-                                        )
+                                <CardContent className="pt-2">
+                                    {!appliedCode ? (
+                                        <div className="flex flex-col gap-2">
+                                            <Input
+                                                placeholder="Enter coupon code"
+                                                value={promoCode}
+                                                onChange={e => setPromoCode(e.target.value.toUpperCase())}
+                                                disabled={validatingCode}
+                                                className="h-10"
+                                            />
+                                            <Button
+                                                onClick={handleApplyPromo}
+                                                disabled={validatingCode || !promoCode.trim()}
+                                                variant="outline"
+                                                className="w-full border-primary text-primary hover:bg-primary/5"
+                                            >
+                                                {validatingCode ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                                                Apply Coupon
+                                            </Button>
+                                        </div>
                                     ) : (
-                                        <div className="flex gap-2">
-                                            <Input placeholder="Enter referral code" value={referralCode} onChange={e => setReferralCode(e.target.value.toUpperCase())} />
-                                            <Button variant="outline" className="shrink-0 border-slate-300 text-slate-600" onClick={() => { if (referralCode.trim()) toast.success('Referral code saved!'); }}>
-                                                Save
+                                        <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
+                                            <span className="text-sm font-bold text-emerald-700">{appliedCode.code} applied ✓</span>
+                                            <Button variant="ghost" size="sm" onClick={() => { setAppliedCode(null); setPromoCode(''); }} className="text-slate-400 hover:text-rose-500">Remove</Button>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            {/* Referral Code — vertical */}
+                            <Card className="border border-slate-200 shadow-sm">
+                                <CardHeader className="pb-2 pt-4">
+                                    <CardTitle className="text-base text-slate-800 flex items-center gap-2">
+                                        <User className="w-4 h-4 text-primary" /> Referral Code
+                                        <span className="text-xs font-normal text-slate-400">(optional)</span>
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-2">
+                                    {referralSaved ? (
+                                        <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                                            <span className="text-sm font-bold text-blue-700">{referralCode} saved ✓</span>
+                                            <Button variant="ghost" size="sm" onClick={() => { setReferralSaved(false); setReferralCode(''); }} className="text-slate-400 hover:text-rose-500">Remove</Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-2">
+                                            <Input
+                                                placeholder="Enter referral code"
+                                                value={referralCode}
+                                                onChange={e => setReferralCode(e.target.value.toUpperCase())}
+                                                className="h-10"
+                                            />
+                                            <Button
+                                                variant="outline"
+                                                className="w-full border-slate-300 text-slate-600 hover:border-primary hover:text-primary"
+                                                onClick={handleSaveReferral}
+                                                disabled={!referralCode.trim()}
+                                            >
+                                                Apply Referral Code
                                             </Button>
                                         </div>
                                     )}
@@ -512,21 +735,24 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                         <CardTitle className="text-lg text-slate-800 flex items-center gap-2">
                                             <Lock className="w-4 h-4 text-primary" /> Payment
                                         </CardTitle>
+                                        <p className="text-xs text-slate-400 mt-0.5">
+                                            {isIndia ? '🇮🇳 Paying in INR via Razorpay' : '🇺🇸 Paying in USD via PayPal / Stripe'}
+                                        </p>
                                     </CardHeader>
                                     <CardContent className="pt-0 space-y-4">
                                         {isEmailChanged ? (
                                             <div className="space-y-4">
                                                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
                                                     <AlertCircle className="w-5 h-5 mb-2 text-amber-600" />
-                                                    You changed your email from <strong className="font-semibold">{guestInfo.email}</strong> to <strong className="font-semibold">{editEmail}</strong>. 
+                                                    You changed your email from <strong className="font-semibold">{guestInfo!.email}</strong> to <strong className="font-semibold">{editEmail}</strong>.
                                                     Please verify this new email to proceed.
                                                 </div>
                                                 {otpStep === 2 ? (
                                                     <div className="space-y-3">
-                                                        <Input 
-                                                            value={newEmailOtp} 
-                                                            onChange={e => setNewEmailOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))} 
-                                                            placeholder="Enter 6-digit OTP" 
+                                                        <Input
+                                                            value={newEmailOtp}
+                                                            onChange={e => setNewEmailOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                                                            placeholder="Enter 6-digit OTP"
                                                             className="text-center tracking-widest text-lg font-bold h-12"
                                                             maxLength={6}
                                                         />
@@ -558,25 +784,30 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                                     <p className="text-xs text-slate-400 mt-1">total amount{isIndia ? ' (incl. GST)' : ''}</p>
                                                 </div>
 
-                                                {razorpaySettings.enabled && (
+                                                {/* India: Razorpay only */}
+                                                {isIndia && razorpaySettings.enabled && (
                                                     <Button onClick={handleRazorpay} disabled={processing} className="w-full h-12 text-sm font-semibold bg-[#072654] hover:bg-[#061e42] text-white gap-2">
                                                         {processing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><CreditCard className="h-4 w-4" /> Pay with Razorpay</>}
                                                     </Button>
                                                 )}
+                                                {isIndia && !razorpaySettings.enabled && (
+                                                    <p className="text-xs text-center text-slate-400">Razorpay is not configured for India payments.</p>
+                                                )}
 
-                                                {paypalSettings.enabled && (
+                                                {/* US: PayPal + Stripe */}
+                                                {!isIndia && paypalSettings.enabled && (
                                                     <div>
                                                         {processing && <div className="flex items-center justify-center gap-2 py-3 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Completing payment...</div>}
                                                         <div ref={paypalRef} id="paypal-button-container" className={processing ? 'opacity-40 pointer-events-none' : ''} />
                                                     </div>
                                                 )}
-
-                                                {stripeSettings.enabled && stripeSettings.clientSecret && stripePromise && (
+                                                {!isIndia && stripeSettings.enabled && stripeSettings.clientSecret && stripePromise && (
                                                     <Elements stripe={stripePromise} options={{ clientSecret: stripeSettings.clientSecret }}>
                                                         <StripePaymentForm total={total} planId={plan.id} promoCode={appliedCode?.code} onSuccess={handleStripeSuccess} />
                                                     </Elements>
                                                 )}
 
+                                                {/* Test Payment */}
                                                 {!anyLivePayment && (
                                                     <Button onClick={handleTestPayment} disabled={processing} className="w-full h-12 text-sm font-semibold bg-primary hover:bg-primary/90 text-white gap-2">
                                                         {processing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="h-4 w-4" /> Complete Purchase (Test)</>}
