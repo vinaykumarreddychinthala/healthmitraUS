@@ -4,7 +4,8 @@ import { sendMail } from '@/lib/email';
 import { 
     planPurchaseConfirmationTemplate,
     confirmationOfPlanPurchaseTemplate,
-    paymentReceiptTemplate
+    paymentReceiptTemplate,
+    planRepurchaseConfirmationTemplate
 } from '@/lib/email-templates';
 import { validatePromoCode } from '@/app/actions/coupons';
 import { sendPlanPurchaseWhatsApp } from '@/lib/whatsapp';
@@ -24,7 +25,7 @@ function generatePolicyId(): string {
 export async function POST(request: Request) {
     try {
         const adminClient = createAdminClient();
-        const { name, email, phone, planId, paymentMethod, transactionId, promoCode, referralCode } = await request.json();
+        const { name, email, phone, planId, paymentMethod, transactionId, promoCode, referralCode, amount, currency } = await request.json();
 
         if (!name || !email || !planId || !paymentMethod) {
             return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
@@ -44,20 +45,27 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
         }
 
-        // Apply promo code if present
-        let finalAmount = plan.price;
+        // Use the amount sent from the frontend which includes live exchange rate and GST
+        // Fallback to USD base price if amount wasn't sent
+        let finalAmount = amount !== undefined ? amount : plan.price;
+        let finalCurrency = currency || 'USD';
         let discount = 0;
+        
         if (promoCode) {
             const promoRes = await validatePromoCode(promoCode, plan.price);
             if (promoRes.success && promoRes.data) {
                 discount = promoRes.data.discount;
-                finalAmount = promoRes.data.finalPrice;
+                // Don't override finalAmount here if amount was passed from frontend
+                if (amount === undefined) finalAmount = promoRes.data.finalPrice;
             }
         }
 
-        // Check if user already exists
-        const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-        const existingUser = existingUsers?.users?.find(u => u.email === email);
+        // Check if user already exists (using profiles table instead of listUsers which is limited to 50)
+        const { data: existingProfile } = await adminClient
+            .from('profiles')
+            .select('id, email')
+            .eq('email', email)
+            .single();
 
         let userId: string;
         let isFirstTimeUser = false;
@@ -71,8 +79,8 @@ export async function POST(request: Request) {
             generatedPassword += chars.charAt(Math.floor(Math.random() * chars.length));
         }
 
-        if (existingUser) {
-            userId = existingUser.id;
+        if (existingProfile) {
+            userId = existingProfile.id;
             // Check if they have any active membership (not expired)
             const today = new Date().toISOString().split('T')[0];
             const { data: activeMembers } = await adminClient
@@ -103,7 +111,8 @@ export async function POST(request: Request) {
                 user_metadata: { full_name: name, phone }
             });
             if (createError || !newUser?.user) {
-                return NextResponse.json({ success: false, error: 'Failed to create user account' }, { status: 500 });
+                console.error('Auth creation error:', createError);
+                return NextResponse.json({ success: false, error: 'Failed to create user account: ' + (createError?.message || 'Unknown error') }, { status: 500 });
             }
             userId = newUser.user.id;
         }
@@ -187,7 +196,7 @@ export async function POST(request: Request) {
             card_unique_id: cardId,
             policy_id: policyId,
             amount_paid: finalAmount,
-            currency: 'USD',
+            currency: finalCurrency,
             payment_method: paymentMethod,
             transaction_id: finalTransactionId,
             valid_from: startDate.toISOString().split('T')[0],
@@ -206,7 +215,7 @@ export async function POST(request: Request) {
             user_id: userId,
             plan_id: planId,
             amount: finalAmount,
-            currency: 'USD',
+            currency: finalCurrency,
             status: 'captured',
             razorpay_order_id: `order_${Date.now()}_${userId.slice(0, 8)}`,
             razorpay_payment_id: finalTransactionId,
@@ -234,9 +243,7 @@ export async function POST(request: Request) {
             const gatewayName = paymentMethod === 'razorpay' ? 'Razorpay' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'stripe' ? 'Stripe' : 'EasePay';
             
             // Construct plan details page URL
-            const host = request.headers.get('host') || 'healthmitra.co.in';
-            const protocol = request.headers.get('x-forwarded-proto') || 'https';
-            const domain = `${protocol}://${host}`;
+            const domain = process.env.NEXT_PUBLIC_APP_URL || 'https://healthmitraus.com';
             const planUrl = plan.slug ? `${domain}/plans/${plan.slug}` : `${domain}/plans`;
 
             if (isFirstTimeUser) {
@@ -251,6 +258,7 @@ export async function POST(request: Request) {
                         planName: plan.name,
                         transactionId: finalTransactionId || 'N/A',
                         amount: finalAmount,
+                        currency: finalCurrency,
                         partnerName: gatewayName,
                         planUrl
                     })
@@ -260,8 +268,13 @@ export async function POST(request: Request) {
                     to: email,
                     subject: `Confirmation of Your HealthMitra Plan Purchase`,
                     devData: { 'Email': email, 'Note': 'Existing user — password unchanged' },
-                    html: confirmationOfPlanPurchaseTemplate({
+                    html: planRepurchaseConfirmationTemplate({
+                        customerName: name,
                         planName: plan.name,
+                        transactionId: finalTransactionId || 'N/A',
+                        amount: finalAmount,
+                        currency: finalCurrency,
+                        partnerName: gatewayName,
                         planUrl
                     })
                 });
@@ -278,12 +291,16 @@ export async function POST(request: Request) {
                     transactionId: finalTransactionId || 'N/A',
                     date: new Date().toLocaleDateString(),
                     planName: plan.name,
-                    amount: finalAmount
+                    amount: finalAmount,
+                    currency: finalCurrency,
+                    userId: isFirstTimeUser ? email : undefined,
+                    password: isFirstTimeUser ? generatedPassword : undefined
                 })
             });
 
             // Send WhatsApp confirmation (non-blocking — failure won't affect purchase)
             if (phone) {
+                const domain = process.env.NEXT_PUBLIC_APP_URL || 'https://healthmitraus.com';
                 const planUrl = plan.slug ? `${domain}/plans/${plan.slug}` : `${domain}/plans`;
                 sendPlanPurchaseWhatsApp({
                     name,
@@ -306,6 +323,7 @@ export async function POST(request: Request) {
                 membershipId: member.id,
                 planName: plan.name,
                 amount: finalAmount,
+                currency: finalCurrency,
                 startDate: startDate.toISOString(),
                 expiryDate: expiryDate.toISOString(),
                 transactionId: finalTransactionId,

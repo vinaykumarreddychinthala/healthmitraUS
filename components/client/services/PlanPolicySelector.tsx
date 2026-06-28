@@ -60,7 +60,7 @@ export default function PlanPolicySelector({ requestedServiceType, onContextSele
                 const data = await res.json();
                 if (!data.success) { setError(data.error || 'Failed to load plans'); return; }
 
-                const universallyAllowed = ["companion", "bill_reimbursement", "general", "emergency"];
+                const universallyAllowed = ["companion", "bill_reimbursement", "general", "emergency", "voucher"];
                 
                 let filtered: PlanContext[] = data.plans || [];
                 if (requestedServiceType) {

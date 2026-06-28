@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
     try {
         const supabase = await createClient();
+        const adminClient = await createAdminClient();
         const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) {
@@ -14,9 +15,9 @@ export async function POST(request: NextRequest) {
 
         switch (type) {
             case 'invoice':
-                return generateInvoice(supabase, user.id, data);
+                return generateInvoice(supabase, adminClient, user.id, data);
             case 'receipt':
-                return generateReceipt(supabase, user.id, data);
+                return generateReceipt(supabase, adminClient, user.id, data);
             case 'reimbursement_receipt':
                 return generateReimbursementReceipt(supabase, user.id, data);
             case 'membership_card':
@@ -53,17 +54,33 @@ function generatePlanReceiptAndInvoiceHTML(invoice: any, purchase: any, isInvoic
     const amount = Number(invoice.amount || 0);
     const amountInWords = numberToWords(amount);
 
+    // Helper to format date as DD MMM YYYY safely using UTC
+    const fmtDateStr = (raw: string, minusOneDay = false) => {
+        if (!raw) return 'N/A';
+        const parts = raw.split('T')[0].split('-');
+        if (parts.length !== 3) return raw;
+        const d = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+        if (minusOneDay) {
+            d.setUTCDate(d.getUTCDate() - 1);
+        }
+        return d.toLocaleDateString('en-IN', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
+    };
+
     let validity = '';
     let term = '1';
     if (purchase && purchase.valid_from && purchase.valid_till) {
-        validity = `${new Date(purchase.valid_from).toLocaleDateString('en-GB')} to ${new Date(purchase.valid_till).toLocaleDateString('en-GB')}`;
+        validity = `${fmtDateStr(purchase.valid_from)} to ${fmtDateStr(purchase.valid_till, true)}`;
         const diffTime = Math.abs(new Date(purchase.valid_till).getTime() - new Date(purchase.valid_from).getTime());
         term = Math.round(diffTime / (1000 * 60 * 60 * 24 * 365)).toString();
     } else {
-        validity = `${invoiceDate} to ${new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('en-GB')}`;
+        const start = new Date(invoice.created_at || new Date());
+        const end = new Date(start);
+        end.setFullYear(end.getFullYear() + 1);
+        end.setDate(end.getDate() - 1);
+        validity = `${start.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} to ${end.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
     }
 
-    const patientName = purchase.full_name || invoice.email || 'Customer';
+    const patientName = purchase.holder_full_name || purchase.full_name || purchase.profileName || invoice.email || 'Customer';
     const patientAddress = invoice.address || 'N/A';
 
     return `<!DOCTYPE html>
@@ -146,8 +163,8 @@ function generatePlanReceiptAndInvoiceHTML(invoice: any, purchase: any, isInvoic
     
     <div class="patient-info">
         <p>To,</p>
-        <p><strong>${patientName}</strong>,</p>
-        <p><strong>C/o-</strong>${patientAddress}</p>
+        <p><strong>${patientName}</strong></p>
+        <p>${patientAddress}</p>
     </div>
     
     <div class="certification">
@@ -170,18 +187,27 @@ function generatePlanReceiptAndInvoiceHTML(invoice: any, purchase: any, isInvoic
     <div class="footer">
         <p style="margin-bottom: 20px;">The above receipt is computer generated and does not require any stamp or signatures.</p>
         <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;" />
-        <div style="text-align: left; font-size: 14px; line-height: 1.8;">
-            <p><strong>Address:</strong> 1550 Sheridan Drive, Buffalo, NY 14217, United States</p>
-            <p><strong>Email Id:</strong> service@healthmitraus.com</p>
-            <p><strong>Website:</strong> www.healthmitraus.com</p>
-            <p><strong>Contact :</strong> +1 716-579-0346</p>
+        <div style="display: flex; justify-content: space-between; gap: 20px; font-size: 14px; line-height: 1.6; text-align: left; margin-bottom: 20px;">
+            <div style="flex: 1; padding: 15px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <p style="margin-bottom: 5px; color: #0d9488;"><strong>🇺🇸 US Office</strong></p>
+                <p>1550 Sheridan Drive,<br>Buffalo, NY 14217, United States</p>
+                <p style="margin-top: 8px;"><strong>Contact:</strong> +1 716-579-0346</p>
+            </div>
+            <div style="flex: 1; padding: 15px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <p style="margin-bottom: 5px; color: #0d9488;"><strong>🇮🇳 India Office</strong></p>
+                <p>HealthMitra Systems Pvt Ltd,<br>C-20/1, Sector 62, Noida, UP 201309, India</p>
+                <p style="margin-top: 8px;"><strong>Contact:</strong> +91 9818823106</p>
+            </div>
+        </div>
+        <div style="text-align: center; font-size: 14px;">
+            <p><strong>Email:</strong> service@healthmitraus.com | <strong>Website:</strong> www.healthmitraus.com</p>
         </div>
     </div>
 </body>
 </html>`;
 }
 
-async function generateInvoice(supabase: any, userId: string, data: any) {
+async function generateInvoice(supabase: any, adminClient: any, userId: string, data: any) {
     const { purchaseId } = data;
 
     // IDOR Protection: Verify user owns this purchase
@@ -193,10 +219,10 @@ async function generateInvoice(supabase: any, userId: string, data: any) {
         .single();
 
     if (purchaseError || !purchaseData) {
-        // Check invoices table
-        const { data: invoiceData } = await supabase
+        // Use adminClient to bypass RLS — ensures India/EasePay payments are found
+        const { data: invoiceData } = await adminClient
             .from('invoices')
-            .select('*')
+            .select('*, profile:user_id(full_name)')
             .eq('id', purchaseId)
             .eq('user_id', userId)
             .single();
@@ -205,9 +231,16 @@ async function generateInvoice(supabase: any, userId: string, data: any) {
             return NextResponse.json({ success: false, error: 'Purchase not found or access denied' }, { status: 404 });
         }
 
+        // Extract customer name from joined profile, fallback to separate query
+        let customerName = (invoiceData as any).profile?.full_name;
+        if (!customerName) {
+            const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
+            customerName = profile?.full_name || 'Customer';
+        }
+
         // Build invoice from invoice table
         const invoice = invoiceData;
-        const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { full_name: 'Customer', coverage_amount: 0, card_unique_id: 'N/A' }, true);
+        const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { full_name: customerName, coverage_amount: 0, card_unique_id: 'N/A' }, true);
         return NextResponse.json({
             success: true,
             data: {
@@ -217,6 +250,9 @@ async function generateInvoice(supabase: any, userId: string, data: any) {
             }
         });
     }
+
+    // Fetch user profile to get full_name for the patient name
+    const { data: userProfile } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
 
     // Build invoice from purchase data
     const invoice = {
@@ -229,7 +265,7 @@ async function generateInvoice(supabase: any, userId: string, data: any) {
         created_at: purchaseData.created_at,
     };
 
-    const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, purchaseData, true);
+    const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { ...purchaseData, profileName: userProfile?.full_name }, true);
     const filename = `${invoice.invoice_number || 'Invoice'}.html`;
 
     return NextResponse.json({
@@ -242,7 +278,7 @@ async function generateInvoice(supabase: any, userId: string, data: any) {
     });
 }
 
-async function generateReceipt(supabase: any, userId: string, data: any) {
+async function generateReceipt(supabase: any, adminClient: any, userId: string, data: any) {
     const { purchaseId } = data;
 
     // IDOR Protection: Verify user owns this purchase
@@ -254,10 +290,10 @@ async function generateReceipt(supabase: any, userId: string, data: any) {
         .single();
 
     if (purchaseError || !purchaseData) {
-        // Check invoices table
-        const { data: invoiceData } = await supabase
+        // Use adminClient to bypass RLS — ensures India/EasePay payments are found
+        const { data: invoiceData } = await adminClient
             .from('invoices')
-            .select('*')
+            .select('*, profile:user_id(full_name)')
             .eq('id', purchaseId)
             .eq('user_id', userId)
             .single();
@@ -266,9 +302,16 @@ async function generateReceipt(supabase: any, userId: string, data: any) {
             return NextResponse.json({ success: false, error: 'Purchase not found or access denied' }, { status: 404 });
         }
 
+        // Extract customer name from joined profile, fallback to separate query
+        let customerName = (invoiceData as any).profile?.full_name;
+        if (!customerName) {
+            const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
+            customerName = profile?.full_name || 'Customer';
+        }
+
         // Build receipt from invoice table
         const invoice = invoiceData;
-        const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { full_name: 'Customer', coverage_amount: 0, card_unique_id: 'N/A' }, false);
+        const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { full_name: customerName, coverage_amount: 0, card_unique_id: 'N/A' }, false);
         return NextResponse.json({
             success: true,
             data: {
@@ -278,6 +321,9 @@ async function generateReceipt(supabase: any, userId: string, data: any) {
             }
         });
     }
+
+    // Fetch user profile to get full_name for the patient name
+    const { data: userProfile2 } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
 
     // Build receipt from purchase data
     const invoice = {
@@ -290,7 +336,7 @@ async function generateReceipt(supabase: any, userId: string, data: any) {
         created_at: purchaseData.created_at,
     };
 
-    const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, purchaseData, false);
+    const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { ...purchaseData, profileName: userProfile2?.full_name }, false);
     const filename = `Receipt-${invoice.invoice_number || 'Payment'}.html`;
 
     return NextResponse.json({
@@ -368,6 +414,17 @@ async function generateMembershipCard(supabase: any, userId: string, data: any) 
         return NextResponse.json({ success: false, error: 'Member not found or access denied' }, { status: 404 });
     }
 
+    const fmtDateStr = (raw: string, minusOneDay = false) => {
+        if (!raw) return 'N/A';
+        const parts = raw.split('T')[0].split('-');
+        if (parts.length !== 3) return raw;
+        const d = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+        if (minusOneDay) {
+            d.setUTCDate(d.getUTCDate() - 1);
+        }
+        return d.toLocaleDateString('en-IN', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
+    };
+
     const cardContent = `
 HEALTHMITRA MEMBERSHIP CARD
 ==========================================
@@ -377,8 +434,8 @@ Card No: ${member.card_unique_id || 'N/A'}
 ------------------------------------------
 Name: ${member.full_name}
 Relation: ${member.relation || 'Self'}
-Valid From: ${member.valid_from ? new Date(member.valid_from).toLocaleDateString('en-US') : 'N/A'}
-Valid Till: ${member.valid_till ? new Date(member.valid_till).toLocaleDateString('en-US') : 'N/A'}
+Valid From: ${fmtDateStr(member.valid_from)}
+Valid Till: ${fmtDateStr(member.valid_till, true)}
 
 ------------------------------------------
 Plan: ${member.plan?.name || 'N/A'}
@@ -411,7 +468,8 @@ async function generateReport(supabase: any, userId: string, data: any) {
         reportContent += `Total Plans: ${purchases?.length || 0}\n\n`;
         purchases?.forEach((p: any, i: number) => {
             reportContent += `${i + 1}. ${p.plan?.name || 'N/A'} - $${p.plan?.price || 0}\n`;
-            reportContent += `   Valid: ${p.valid_from ? new Date(p.valid_from).toLocaleDateString('en-US') : 'N/A'} to ${p.valid_till ? new Date(p.valid_till).toLocaleDateString('en-US') : 'N/A'}\n`;
+            const formatDate = (dateStr: string) => dateStr ? new Date(dateStr).toLocaleDateString('en-US') : 'N/A';
+            reportContent += `   Valid: ${formatDate(p.valid_from)} to ${formatDate(p.valid_till)}\n`;
         });
     } else if (reportType === 'claims') {
         const { data: claims } = await supabase

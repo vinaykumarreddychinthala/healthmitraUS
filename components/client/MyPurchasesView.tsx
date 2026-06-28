@@ -128,21 +128,23 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
 
     return (
         <div className="space-y-6 pb-10">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            {/* Header row: title + badge + browse button */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">My Purchased Plans</h1>
-                    <p className="text-slate-500 text-sm">View plan details and manage policy holder information</p>
+                    <p className="text-slate-500 text-sm mt-0.5">View plan details and manage policy holder information</p>
                 </div>
-                <Badge className="bg-slate-100 text-slate-600 shrink-0">
-                    {allPurchases.length} Plan{allPurchases.length !== 1 ? 's' : ''}
-                </Badge>
+                <div className="flex items-center gap-3 shrink-0">
+                    <Badge className="bg-slate-100 text-slate-600">
+                        {allPurchases.length} Plan{allPurchases.length !== 1 ? 's' : ''}
+                    </Badge>
+                    <Link href="/shop/plans">
+                        <Button variant="outline" size="sm" className="text-teal-600 border-teal-200 hover:bg-teal-50">
+                            <ShoppingBag size={15} className="mr-1.5" /> Browse More Plans
+                        </Button>
+                    </Link>
+                </div>
             </div>
-
-                <Link href="/shop/plans" className="shrink-0">
-                    <Button variant="outline" className="text-teal-600 border-teal-200 hover:bg-teal-50">
-                        <ShoppingBag size={16} className="mr-2" /> Browse More Plans
-                    </Button>
-                </Link>
 
             {/* Active Plans Section */}
             {activePlans.length > 0 && (
@@ -155,7 +157,7 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                     {activePlans.map((purchase, index) => (
                         <div
                             key={purchase.id}
-                            className={`bg-white rounded-xl border p-5 shadow-sm hover:shadow-md transition-all ${index === 0 ? 'border-teal-200 ring-1 ring-teal-100' : 'border-slate-200'
+                            className={`bg-white rounded-xl border p-6 shadow-sm hover:shadow-md transition-all ${index === 0 ? 'border-teal-200 ring-1 ring-teal-100' : 'border-slate-200'
                                 }`}
                         >
                             <div className="flex flex-col lg:flex-row justify-between lg:items-start gap-4">
@@ -163,7 +165,7 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                     <div className="p-3 rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 text-teal-600 border border-teal-100">
                                         <CreditCard size={28} />
                                     </div>
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <h3 className="font-bold text-lg text-slate-800">{purchase.plan_name}</h3>
                                             <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
@@ -176,40 +178,42 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                             )}
                                         </div>
 
-                                        <p className="text-sm text-slate-500 mt-1 font-mono">Plan ID: {purchase.id}</p>
+                                        <p className="text-xs text-slate-400 mt-1.5 font-mono tracking-tight">Plan ID: {purchase.id}</p>
 
-                                        <div className="flex flex-wrap gap-x-6 gap-y-2 mt-3 text-sm">
+                                        <div className="flex flex-wrap gap-x-8 gap-y-2 mt-3 text-sm">
                                             <span className="flex items-center gap-1.5 text-slate-600">
-                                                <Calendar size={14} className="text-slate-400" />
-                                                Purchased: <strong>{formatDate(purchase.start_date)}</strong>
+                                                <Calendar size={14} className="text-slate-400 shrink-0" />
+                                                <span>Purchased: <strong className="text-slate-800">{formatDate(purchase.start_date)}</strong></span>
                                             </span>
                                             <span className="flex items-center gap-1.5 text-slate-600">
-                                                <Clock size={14} className="text-slate-400" />
-                                                Valid till: <strong>{formatDate(purchase.expiry_date)}</strong>
+                                                <Clock size={14} className="text-slate-400 shrink-0" />
+                                                <span>Valid till: <strong className="text-slate-800">{formatDate(purchase.expiry_date)}</strong></span>
                                             </span>
                                         </div>
 
-                                        <div className="flex flex-wrap gap-x-6 gap-y-2 mt-2 text-sm">
+                                        {/* Members & Coverage row */}
+                                        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mt-3 text-sm">
                                             <span className="flex items-center gap-1.5 text-slate-600">
-                                                <Users size={14} className="text-slate-400" />
-                                                Members: <strong>{purchase.members_count ?? 1}</strong>/<strong>{purchase.max_members ?? 1}</strong>
+                                                <Users size={14} className="text-slate-400 shrink-0" />
+                                                Members: <strong className="text-slate-800 ml-0.5">{purchase.members_count ?? 1}</strong>/<strong className="text-slate-800">{purchase.max_members ?? 1}</strong>
                                             </span>
-                                            <span className="flex items-center gap-1.5 text-teal-600 font-semibold">
+                                            <span className="flex items-center gap-1.5 text-sm font-semibold text-teal-700">
                                                 Coverage: No Limit
                                             </span>
-                                            {/* Plan type badge */}
+                                        </div>
+                                        {/* Badges row */}
+                                        <div className="flex flex-wrap items-center gap-2 mt-2">
                                             {(purchase.max_members ?? 1) === 1 ? (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-xs font-semibold">
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-xs font-semibold">
                                                     👤 Single Member
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold">
                                                     👨‍👩‍👧‍👦 Multi Member · up to {purchase.max_members}
                                                 </span>
                                             )}
-                                            {/* Days remaining */}
                                             {purchase.expiry_date && (
-                                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
+                                                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
                                                     ⏳ {getDaysRemaining(purchase.expiry_date)} days left
                                                 </span>
                                             )}
@@ -295,7 +299,7 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                                 Members: {purchase.members_count ?? 1}/{purchase.max_members ?? 1}
                                             </span>
                                             <span>
-                                                Coverage: ${purchase.coverage_amount?.toLocaleString('en-IN')}
+                                                Coverage: As per plan benefit
                                             </span>
                                         </div>
                                     </div>
@@ -360,8 +364,8 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                     </Badge>
                                 </div>
                                 <p className="text-2xl font-bold mt-4">
-                                    ${selectedPurchase.coverage_amount?.toLocaleString('en-IN')}
-                                    <span className="text-sm font-normal text-white/80 ml-2">Coverage</span>
+                                    No Limit
+                                    <span className="text-sm font-normal text-white/80 ml-2">Coverage (As per plan benefit)</span>
                                 </p>
                             </div>
 

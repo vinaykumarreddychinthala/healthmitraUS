@@ -80,7 +80,7 @@ export function ReimbursementsView({ initialClaims }: ReimbursementsViewProps) {
         { value: 'under_review', label: 'Under Review', count: claims.filter((c: any) => c.status === 'under_review').length, color: 'blue' },
     ];
 
-    const claimTypes = ['all', 'Medicine', 'Diagnostic Test', 'OPD Consultation', 'Hospitalization'];
+    const claimTypes = ['all', 'Medicine', 'Diagnostic Test', 'OPD Consultation'];
 
     const handleReset = () => {
         setSelectedStatuses([]);

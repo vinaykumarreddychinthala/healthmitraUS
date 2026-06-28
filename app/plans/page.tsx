@@ -37,6 +37,7 @@ export default function PlansPage() {
     const [plans, setPlans] = useState<Plan[]>([]);
     const [loading, setLoading] = useState(true);
     const [countryMode, setCountryMode] = useState<CountryMode>('us');
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     useEffect(() => {
         const fetchPlans = async () => {
@@ -45,6 +46,7 @@ export default function PlansPage() {
             // Check if user is logged in — redirect to shop/plans
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
+                setIsLoggedIn(true);
                 router.push('/shop/plans');
                 return;
             }
@@ -60,6 +62,25 @@ export default function PlansPage() {
         };
         fetchPlans();
     }, [router]);
+
+    /**
+     * If user is already logged in (e.g. navigated here directly), send them straight
+     * to /checkout/{planId}. Guests go through /checkout-auth for email verification.
+     */
+    const handleGetStarted = async (planId: string) => {
+        if (isLoggedIn) {
+            router.push(`/checkout/${planId}`);
+            return;
+        }
+        // Double-check auth at click time in case session changed
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            router.push(`/checkout/${planId}`);
+        } else {
+            router.push(`/checkout-auth/${planId}`);
+        }
+    };
 
     const isIndia = countryMode === 'india';
     const currency = isIndia ? '₹' : '$';
@@ -139,14 +160,13 @@ export default function PlansPage() {
                                                 ));
                                             })()}
                                         </ul>
-                                        <Link href={`/checkout-auth/${plan.id}`} className="block">
-                                            <Button
-                                                className={`w-full ${plan.is_featured ? 'bg-primary hover:bg-primary/90' : ''}`}
-                                                variant={plan.is_featured ? 'default' : 'outline'}
-                                            >
-                                                Get Started
-                                            </Button>
-                                        </Link>
+                                        <Button
+                                            onClick={() => handleGetStarted(plan.id)}
+                                            className={`w-full ${plan.is_featured ? 'bg-primary hover:bg-primary/90' : ''}`}
+                                            variant={plan.is_featured ? 'default' : 'outline'}
+                                        >
+                                            Get Started
+                                        </Button>
                                     </div>
                                 ))}
                             </div>

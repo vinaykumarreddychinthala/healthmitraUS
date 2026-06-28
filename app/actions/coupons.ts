@@ -62,7 +62,9 @@ export async function upsertCoupon(coupon: Partial<Coupon>) {
         code: coupon.code.trim().toUpperCase(),
         discount_value: coupon.value || 0,
         discount_type: discountType,
-        is_active: true,
+        is_active: coupon.status === 'active',
+        valid_until: coupon.endDate || null,
+        usage_limit: coupon.totalUsesAllowed || null,
     };
 
     let error;

@@ -307,7 +307,7 @@ export async function POST(request: Request) {
             });
 
             // Construct plan details page URL
-            const host = request.headers.get('host') || 'healthmitra.co.in';
+            const host = request.headers.get('host') || 'healthmitraus.com';
             const protocol = request.headers.get('x-forwarded-proto') || 'https';
             const domain = `${protocol}://${host}`;
             const planUrl = plan.slug ? `${domain}/plans/${plan.slug}` : `${domain}/plans`;

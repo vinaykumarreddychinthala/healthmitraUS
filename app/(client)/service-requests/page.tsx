@@ -58,7 +58,7 @@ const SERVICES = [
   },
   {
     id: "doctor",
-    title: "Doctor Appointment",
+    title: "At Home Doctor Consultant",
     description:
       "Consult with top specialists online or visit a nearby clinic.",
     icon: Stethoscope,

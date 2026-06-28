@@ -22,6 +22,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import StripePaymentForm from '@/components/client/StripePaymentForm';
 import { parseDescriptionPoints } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
 
 interface Plan {
     id: string; name: string; description: string; price: number;
@@ -78,38 +79,76 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
         email: string; name: string; phone: string;
         planName: string; transactionId: string; amount: number;
         basePrice: number; discountAmt: number; taxAmount: number;
-        paymentDate: string;
+        paymentDate: string; receiptCurrency: string;
     } | null>(null);
     const [editName, setEditName] = useState('');
     const [editEmail, setEditEmail] = useState('');
     const [editPhone, setEditPhone] = useState('');
     const [expandedFeature, setExpandedFeature] = useState<string | null>(null);
     const [countryMode, setCountryMode] = useState<CountryMode>('us');
+    const [exchangeRate, setExchangeRate] = useState<number>(84); // default fallback USD→INR
+    const [rateLoading, setRateLoading] = useState(false);
+
+    // Fetch live USD→INR exchange rate
+    useEffect(() => {
+        setRateLoading(true);
+        fetch('https://open.er-api.com/v6/latest/USD')
+            .then(r => r.json())
+            .then(data => {
+                if (data?.rates?.INR) setExchangeRate(data.rates.INR);
+            })
+            .catch(() => { /* silently use fallback rate */ })
+            .finally(() => setRateLoading(false));
+    }, []);
 
     const [otpStep, setOtpStep] = useState(1);
     const [newEmailOtp, setNewEmailOtp] = useState('');
     const [newEmailHash, setNewEmailHash] = useState('');
     const [turnstileToken, setTurnstileToken] = useState<string>('');
+    const [isPlanDetailsOpen, setIsPlanDetailsOpen] = useState(false);
 
     useEffect(() => {
-        const stored = sessionStorage.getItem('checkout_user');
-        if (!stored) {
-            toast.error('Please verify your email first.');
-            router.push(`/checkout-auth/${planId}`);
-            return;
-        }
-        const info: GuestInfo = JSON.parse(stored);
-        if (!info.verified || info.planId !== planId) {
-            toast.error('Session mismatch. Please start again.');
-            router.push(`/checkout-auth/${planId}`);
-            return;
-        }
-        setGuestInfo(info);
-        setEditName(info.name);
-        setEditEmail(info.email);
-        setEditPhone(info.phone);
+        const checkAuthAndLoad = async () => {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
 
-        const load = async () => {
+            let info: GuestInfo | null = null;
+
+            if (user) {
+                // If logged in, fetch profile and construct GuestInfo dynamically
+                const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+                info = {
+                    name: profile?.full_name || '',
+                    email: user.email || '',
+                    phone: profile?.phone || '',
+                    planId: planId,
+                    verified: true,
+                };
+            } else {
+                // If guest, check sessionStorage
+                const stored = sessionStorage.getItem('checkout_user');
+                if (!stored) {
+                    toast.error('Please verify your email first.');
+                    router.push(`/checkout-auth/${planId}`);
+                    return;
+                }
+                const parsed: GuestInfo = JSON.parse(stored);
+                if (!parsed.verified || parsed.planId !== planId) {
+                    toast.error('Session mismatch. Please start again.');
+                    router.push(`/checkout-auth/${planId}`);
+                    return;
+                }
+                info = parsed;
+            }
+
+            if (!info) return;
+
+            setGuestInfo(info);
+            setEditName(info.name);
+            setEditEmail(info.email);
+            setEditPhone(info.phone);
+
+            // Fetch settings and plan details
             const [settingsRes, paypalRes, stripeRes, planRes] = await Promise.all([
                 fetch('/api/settings/razorpay'), fetch('/api/settings/paypal'),
                 fetch('/api/settings/stripe'), fetch(`/api/plans/${planId}`),
@@ -132,30 +171,40 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
             else { toast.error('Plan not found'); router.push('/plans'); }
             setLoading(false);
         };
-        load();
+        checkAuthAndLoad();
     }, [planId, router]);
 
     const onPurchaseSuccess = (result: { success: boolean; data?: { planName?: string; amount?: number; transactionId?: string } }) => {
         sessionStorage.removeItem('checkout_user');
         const d = result?.data || {};
-        const base = plan?.price || 0;
-        const disc = appliedCode?.discount || 0;
         const indiaMode = countryMode === 'india';
-        const tax = indiaMode ? Math.round((base - disc) * 0.18) : 0;
-        const computedTotal = (base - disc) + tax;
+        const receiptCurrency = indiaMode ? '₹' : '$';
+
+        const usdBase = plan?.price || 0;
+        const usdDisc = appliedCode?.discount || 0;
+
+        // Convert to display currency
+        const base = indiaMode ? Math.round(usdBase * exchangeRate) : usdBase;
+        const disc = indiaMode ? Math.round(usdDisc * exchangeRate) : usdDisc;
+        const baseNet = Math.max(0, base - disc);
+        const tax = indiaMode ? Math.round(baseNet * 0.18) : 0;
+        const computedTotal = baseNet + tax;
+
         setPurchaseSuccess({
             email: editEmail,
             name: editName,
             phone: editPhone,
             planName: d.planName || plan?.name || '',
             transactionId: d.transactionId || '',
-            amount: d.amount ?? computedTotal,
+            amount: computedTotal,
             basePrice: base,
             discountAmt: disc,
             taxAmount: tax,
             paymentDate: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }),
+            receiptCurrency,
         });
     };
+
 
     const callGuestPurchase = async (paymentMethod: string, transactionId?: string) => {
         if (!plan || !guestInfo) return null;
@@ -168,6 +217,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                 transactionId: transactionId || `TEST_${Date.now()}`,
                 promoCode: appliedCode?.code,
                 referralCode: referralCode.trim() || undefined,
+                amount: total,
+                currency: isIndia ? 'INR' : 'USD'
             }),
         });
         return res.json();
@@ -230,6 +281,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
     const handleSendNewEmailOTP = async () => {
         if (!editName || !editEmail || !editPhone) {
             toast.error('Please fill in all fields');
+            return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(editEmail)) {
+            toast.error('please enter valid mail id');
             return;
         }
         setProcessing(true);
@@ -341,13 +398,17 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
     if (!plan) return null;
 
     const discount = appliedCode?.discount || 0;
-    const baseAfterDiscount = Math.max(0, plan.price - discount);
 
-    // Country-mode pricing
+    // Country-mode pricing with live currency conversion
     const isIndia = countryMode === 'india';
+    // Convert base plan price (USD) → INR if India, else keep in USD
+    const basePriceInCurrency = isIndia ? Math.round(plan.price * exchangeRate) : plan.price;
+    const discountInCurrency = isIndia ? Math.round(discount * exchangeRate) : discount;
+    const coverageAmountInCurrency = isIndia && plan.coverage_amount ? Math.round(Number(plan.coverage_amount) * exchangeRate) : plan.coverage_amount;
+    const baseAfterDiscount = Math.max(0, basePriceInCurrency - discountInCurrency);
     const gstAmount = isIndia ? Math.round(baseAfterDiscount * 0.18) : 0;
     const total = baseAfterDiscount + gstAmount;
-    const currency = '$';
+    const currency = isIndia ? '₹' : '$';
 
     // Payment availability per country
     const indiaPaymentAvailable = razorpaySettings.enabled;
@@ -425,25 +486,25 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                     </div>
                                     <div className="flex justify-between py-3 border-b border-slate-100">
                                         <p className="text-sm text-slate-700">{purchaseSuccess.planName}</p>
-                                        <p className="text-sm font-medium text-slate-800">${Number(purchaseSuccess.amount).toLocaleString()}</p>
+                                        <p className="text-sm font-medium text-slate-800">{purchaseSuccess.receiptCurrency}{Number(purchaseSuccess.amount).toLocaleString()}</p>
                                     </div>
                                     <div className="space-y-2 py-3 border-b border-slate-100">
                                         <div className="flex justify-between text-sm">
                                             <span className="text-slate-500">Basic Price</span>
-                                            <span className="text-slate-700">${Number(purchaseSuccess.basePrice).toLocaleString()}</span>
+                                            <span className="text-slate-700">{purchaseSuccess.receiptCurrency}{Number(purchaseSuccess.basePrice).toLocaleString()}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-slate-500">Discount</span>
-                                            <span className="text-emerald-600">-${Number(purchaseSuccess.discountAmt).toLocaleString()}</span>
+                                            <span className="text-emerald-600">-{purchaseSuccess.receiptCurrency}{Number(purchaseSuccess.discountAmt).toLocaleString()}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-slate-500">Tax</span>
-                                            <span className="text-slate-700">${Number(purchaseSuccess.taxAmount).toLocaleString()}</span>
+                                            <span className="text-slate-700">{purchaseSuccess.receiptCurrency}{Number(purchaseSuccess.taxAmount).toLocaleString()}</span>
                                         </div>
                                     </div>
                                     <div className="flex justify-between items-center pt-3">
                                         <span className="font-bold text-slate-900 text-base">Total:</span>
-                                        <span className="font-bold text-teal-600 text-xl">${Number(purchaseSuccess.amount).toLocaleString()}</span>
+                                        <span className="font-bold text-teal-600 text-xl">{purchaseSuccess.receiptCurrency}{Number(purchaseSuccess.amount).toLocaleString()}</span>
                                     </div>
                                 </div>
 
@@ -503,13 +564,18 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                         : 'border-slate-200 text-slate-500 hover:border-slate-300'
                                 }`}
                             >
-                                <span className="text-lg">🇮🇳</span> India (USD $ + GST)
+                                <span className="text-lg">🇮🇳</span> India (INR ₹ + GST)
                             </button>
                         </div>
                         {countryMode === 'india' && (
-                            <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-                                <MapPin className="w-3 h-3 shrink-0" /> 18% GST will be applied to your order total as per Indian tax regulations.
-                            </p>
+                            <div className="mt-2 space-y-1">
+                                <p className="text-xs text-amber-600 flex items-center gap-1">
+                                    <MapPin className="w-3 h-3 shrink-0" /> 18% GST will be applied as per Indian tax regulations.
+                                </p>
+                                <p className="text-xs text-slate-400 flex items-center gap-1">
+                                    {rateLoading ? '⏳ Fetching live rate...' : `💱 1 USD = ₹${exchangeRate.toFixed(2)} (live rate)`}
+                                </p>
+                            </div>
                         )}
                     </div>
 
@@ -538,24 +604,37 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                                     <h3 className="font-bold text-slate-900 text-lg leading-tight">{plan.name}</h3>
                                                     <div className="flex flex-wrap items-center gap-2 mt-1">
                                                         <Badge variant="outline" className="text-xs border-primary/30 text-primary">{plan.duration_days} days</Badge>
-                                                        {plan.coverage_amount && <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50">${Number(plan.coverage_amount).toLocaleString()} cover</Badge>}
+                                                        {!!plan.coverage_amount && Number(plan.coverage_amount) > 0 && <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50">{currency}{Number(coverageAmountInCurrency).toLocaleString()} cover</Badge>}
                                                     </div>
                                                 </div>
                                             </div>
                                             <div className="text-right shrink-0">
-                                                <p className="text-2xl font-bold text-slate-900">{currency}{Number(plan.price).toLocaleString()}</p>
-                                                <p className="text-xs text-slate-400">base price</p>
+                                                <p className="text-2xl font-bold text-slate-900">{currency}{Number(basePriceInCurrency).toLocaleString()}</p>
+                                                <p className="text-xs text-slate-400">Base Price</p>
                                             </div>
                                         </div>
-                                        {/* Description points */}
-                                        <div className="text-slate-500 text-sm space-y-1 pl-1">
-                                            {parseDescriptionPoints(plan.description).map((point, idx) => (
-                                                <div key={idx} className="flex items-start gap-1.5">
-                                                    <span className="text-primary select-none mt-1 shrink-0">•</span>
-                                                    <span>{point}</span>
-                                                </div>
-                                            ))}
-                                        </div>
+                                        {/* Description points Dropdown Toggle */}
+                                        <button 
+                                            onClick={() => setIsPlanDetailsOpen(!isPlanDetailsOpen)}
+                                            className="mt-3 flex items-center justify-between w-full text-sm font-semibold text-slate-700 hover:text-primary transition-colors"
+                                        >
+                                            <span>View Plan Details</span>
+                                            <svg className={`w-4 h-4 transition-transform ${isPlanDetailsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
+
+                                        {/* Collapsible Description points */}
+                                        {isPlanDetailsOpen && (
+                                            <div className="text-slate-500 text-sm space-y-1 pl-1 mt-3 border-t border-primary/10 pt-3">
+                                                {parseDescriptionPoints(plan.description).map((point, idx) => (
+                                                    <div key={idx} className="flex items-start gap-1.5">
+                                                        <span className="text-primary select-none mt-1 shrink-0">•</span>
+                                                        <span>{point}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -607,12 +686,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                 <CardContent className="pt-0 space-y-3">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-slate-500">Base Price</span>
-                                        <span className="text-slate-800 font-medium">{currency}{Number(plan.price).toLocaleString()}</span>
+                                        <span className="text-slate-800 font-medium">{currency}{Number(basePriceInCurrency).toLocaleString()}</span>
                                     </div>
                                     {appliedCode && (
                                         <div className="flex justify-between text-sm text-emerald-600 font-medium">
                                             <span className="flex items-center gap-1"><Tag className="w-3 h-3" /> Discount ({appliedCode.code})</span>
-                                            <span>-{currency}{appliedCode.discount.toLocaleString()}</span>
+                                            <span>-{currency}{Number(discountInCurrency).toLocaleString()}</span>
                                         </div>
                                     )}
                                     {isIndia && (

@@ -157,15 +157,15 @@ function drawMemberInfo(ctx: CanvasRenderingContext2D, card: CardData) {
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = '10px Inter, system-ui, sans-serif';
     ctx.fillText('Card ID:', sx, sy + 24);
-    ctx.fillStyle = WHITE;
+    ctx.fillStyle = '#fcd34d';  // amber-300 to match front card
     ctx.font = 'bold 10px "Courier New", monospace';
     ctx.fillText(card.cardUniqueId, sx + 50, sy + 24);
 
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = '10px Inter, system-ui, sans-serif';
     ctx.fillText('Member ID:', sx, sy + 40);
-    ctx.fillStyle = WHITE;
-    ctx.font = '10px "Courier New", monospace';
+    ctx.fillStyle = '#fcd34d';  // amber-300 to match front card
+    ctx.font = 'bold 10px "Courier New", monospace';
     ctx.fillText(card.memberId, sx + 68, sy + 40);
 }
 
@@ -329,7 +329,6 @@ function drawBackCard(ctx: CanvasRenderingContext2D, card: CardData) {
     ctx.fillText('KEY BENEFITS', bx, by);
 
     const defaultBenefits = [
-        'Cashless Hospitalization at 1000+ hospitals',
         'OPD Coverage – Unlimited as per Plan',
         'Unlimited Diagnostic Tests – 30% to 50% discount',
         'Medicine Home Delivery on 30% discount',

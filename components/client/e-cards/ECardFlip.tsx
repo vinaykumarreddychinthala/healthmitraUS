@@ -89,7 +89,6 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick, onComplete
     }
 
     const defaultBenefits = [
-        'Cashless Hospitalization at 1000+ hospitals',
         'OPD Coverage – Unlimited as per Plan',
         'Unlimited Diagnostic Tests – 30% to 50% discount',
         'Medicine Home Delivery on 30% discount',
@@ -106,7 +105,7 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick, onComplete
             <div
                 className={`relative w-full transition-all duration-700 transform-style-3d cursor-pointer select-none ${isFlipped ? 'rotate-y-180' : ''}`}
                 style={{ minHeight: '340px' }}
-                onClick={() => { if (!isFlipped) setIsFlipped(true); }}
+                onClick={() => setIsFlipped(!isFlipped)}
             >
 
                 {/* ==================== FRONT SIDE ==================== */}
@@ -152,41 +151,41 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick, onComplete
                             <div className="flex-1 min-w-0">
                                 <h4 className="font-black text-lg uppercase tracking-wider leading-tight truncate">{card.name}</h4>
                                 <p className="text-teal-200 text-[10px] mt-1">{card.relation}</p>
-                                <div className="mt-2 space-y-0.5 text-[10px]">
-                                    <p className="text-teal-100">
-                                        <span className="text-teal-300">Card No.: </span>
-                                        <span className="font-mono font-bold">{card.cardUniqueId}</span>
-                                    </p>
-                                    <p className="text-teal-100">
-                                        <span className="text-teal-300">Member ID: </span>
-                                        <span className="font-mono">{card.memberId || '—'}</span>
-                                    </p>
+                                <div className="mt-2 space-y-1 text-[10px]">
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-teal-300 w-[58px] shrink-0">Card No.:</span>
+                                        <span className="font-mono font-bold text-amber-300">{card.cardUniqueId}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-teal-300 w-[58px] shrink-0">Member ID:</span>
+                                        <span className="font-mono font-bold text-amber-300">{card.memberId || '—'}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         {/* ── INFO GRID ── */}
                         <div className="mt-3 z-10 p-3 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
-                            <div className="grid grid-cols-5 gap-x-2 gap-y-1 text-[10px]">
+                            <div className="grid grid-cols-5 gap-x-2 gap-y-2 text-[10px]">
                                 <div>
                                     <p className="text-teal-300 uppercase text-[9px]">DOB</p>
-                                    <p className="font-semibold text-white">{card.dob || 'N/A'}</p>
+                                    <p className="font-semibold text-white mt-1">{card.dob || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-teal-300 uppercase text-[9px]">Age</p>
-                                    <p className="font-semibold text-white">{card.age ? `${card.age} yrs` : 'N/A'}</p>
+                                    <p className="font-semibold text-white mt-1">{card.age ? `${card.age} yrs` : 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-teal-300 uppercase text-[9px]">Gender</p>
-                                    <p className="font-semibold text-white">{card.gender === 'M' ? 'Male' : card.gender === 'F' ? 'Female' : card.gender || 'N/A'}</p>
+                                    <p className="font-semibold text-white mt-1">{card.gender === 'M' ? 'Male' : card.gender === 'F' ? 'Female' : card.gender || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-teal-300 uppercase text-[9px]">Blood Grp</p>
-                                    <p className="font-black text-base text-red-300 leading-tight">{card.bloodGroup || '—'}</p>
+                                    <p className="font-black text-base text-red-300 leading-tight mt-1">{card.bloodGroup || '—'}</p>
                                 </div>
                                 <div>
                                     <p className="text-teal-300 uppercase text-[9px]">Relation</p>
-                                    <p className="font-semibold text-white">{card.relation}</p>
+                                    <p className="font-semibold text-white mt-1">{card.relation}</p>
                                 </div>
                             </div>
                         </div>
@@ -200,15 +199,15 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick, onComplete
                                 <p className="text-xs font-bold text-white mt-0.5">No Limit</p>
                             </div>
                             <div className="col-span-2 bg-white/10 border border-white/10 rounded-xl p-2.5">
-                                <p className="text-teal-300 text-[9px] uppercase tracking-wider font-semibold mb-1.5">Validity Period</p>
-                                <div className="text-[10px] space-y-1">
-                                    <div className="flex justify-between">
-                                        <span className="text-teal-200">From</span>
-                                        <span className="font-bold text-white">{card.validFrom}</span>
+                                <p className="text-teal-300 text-[9px] uppercase tracking-wider font-semibold mb-2">Validity Period</p>
+                                <div className="text-[10px] space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-teal-200 w-8">From</span>
+                                        <span className="font-bold text-amber-300">{card.validFrom}</span>
                                     </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-teal-200">Till</span>
-                                        <span className="font-bold text-white">{card.validTill}</span>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-teal-200 w-8">Till</span>
+                                        <span className="font-bold text-amber-300">{card.validTill}</span>
                                     </div>
                                 </div>
                             </div>

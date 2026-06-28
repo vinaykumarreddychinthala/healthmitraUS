@@ -367,64 +367,107 @@ export default function SupportClient({ initialTickets }: SupportClientProps) {
 
                     {/* CONTACT INFO TAB */}
                     {activeTab === 'contact' && (
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
-                                    <h4 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                                        <Phone size={18} className="text-teal-600" /> Phone Support
-                                    </h4>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <p className="text-xs text-slate-500">24/7 Helpline</p>
-                                            <a href="tel:+919818823106" className="font-bold text-slate-800 hover:text-teal-600 transition-colors">+91 9818823106</a>
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Digital Contact Methods */}
+                                <div className="space-y-6">
+                                    <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Direct Contact</h3>
+                                    
+                                    <div className="group flex items-start gap-4 p-5 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-teal-200 transition-all">
+                                        <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                                            <Phone size={24} />
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-slate-500">WhatsApp Support</p>
-                                            <a href="https://wa.me/919818823106" target="_blank" rel="noopener noreferrer" className="font-bold text-emerald-600 hover:underline">+91 9818823106</a>
+                                        <div className="space-y-3 flex-1">
+                                            <h4 className="font-semibold text-slate-800 text-base">Phone Support</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                                    <p className="text-xs font-medium text-slate-500 mb-1">USA Helpline</p>
+                                                    <a href="tel:+17165790346" className="font-bold text-slate-700 hover:text-teal-600">+1 716-579-0346</a>
+                                                </div>
+                                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                                    <p className="text-xs font-medium text-slate-500 mb-1">India Helpline</p>
+                                                    <a href="tel:+919818823106" className="font-bold text-slate-700 hover:text-teal-600">+91 9818823106</a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="group flex items-start gap-4 p-5 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all">
+                                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                            <Mail size={24} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="font-semibold text-slate-800 text-base mb-2">Email Support</h4>
+                                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                                <p className="text-xs font-medium text-slate-500 mb-1">General & Support Queries</p>
+                                                <a href="mailto:service@healthmitraus.com" className="font-bold text-slate-700 hover:text-blue-600 text-sm md:text-base">service@healthmitraus.com</a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="group flex items-start gap-4 p-5 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-amber-200 transition-all">
+                                        <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                                            <Clock size={24} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="font-semibold text-slate-800 text-base mb-2">Business Hours</h4>
+                                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-2">
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="font-medium text-slate-600">Monday – Saturday</span>
+                                                    <span className="font-bold text-slate-800">9:00 AM – 8:00 PM</span>
+                                                </div>
+                                                <div className="h-px bg-slate-200"></div>
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="font-medium text-slate-600">Sunday</span>
+                                                    <span className="font-bold text-slate-800">10:00 AM – 6:00 PM</span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
-                                    <h4 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                                        <Mail size={18} className="text-blue-600" /> Email Support
-                                    </h4>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <p className="text-xs text-slate-500">General Queries</p>
-                                            <a href="mailto:service@healthmitraus.com" className="font-bold text-slate-800 hover:text-blue-600 transition-colors">service@healthmitraus.com</a>
+                                {/* Office Locations */}
+                                <div className="space-y-6">
+                                    <h3 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2">Our Offices</h3>
+                                    
+                                    <div className="relative overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-white p-6 shadow-sm">
+                                        <div className="absolute -right-6 -top-6 w-24 h-24 bg-teal-100 rounded-full opacity-50 blur-2xl"></div>
+                                        <div className="flex items-start gap-4 relative z-10">
+                                            <div className="w-10 h-10 bg-white shadow-sm text-2xl rounded-full flex items-center justify-center shrink-0">🇺🇸</div>
+                                            <div>
+                                                <h4 className="font-bold text-teal-900 text-lg mb-2">USA Office</h4>
+                                                <p className="text-sm text-teal-800/80 leading-relaxed font-medium">
+                                                    1550 Sheridan Drive,<br />
+                                                    Buffalo, NY 14217,<br />
+                                                    United States
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="p-5 bg-teal-50 rounded-xl border border-teal-200">
-                                    <h4 className="font-semibold text-teal-800 mb-3">🇺🇸 USA Office</h4>
-                                    <p className="text-sm text-teal-700">
-                                        1550 Sheridan Drive,<br />
-                                        Buffalo, NY 14217,<br />
-                                        United States
-                                    </p>
-                                </div>
-                                <div className="p-5 bg-teal-50 rounded-xl border border-teal-200">
-                                    <h4 className="font-semibold text-teal-800 mb-3">🇮🇳 India Office</h4>
-                                    <p className="text-sm text-teal-700">
-                                        HealthMitra Systems Pvt Ltd.<br />
-                                        C/O JSS Academy of Technical Education,<br />
-                                        C-20/1, Sector 62, Noida,<br />
-                                        Uttar Pradesh 201309
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
-                                <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
-                                    <Clock size={16} className="text-slate-500" /> Business Hours
-                                </h4>
-                                <div className="text-sm text-slate-700 space-y-1">
-                                    <p><span className="font-medium">Monday – Saturday:</span> 9 AM – 8 PM</p>
-                                    <p><span className="font-medium">Sunday:</span> 10 AM – 6 PM</p>
+                                    <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-6 shadow-sm">
+                                        <div className="absolute -right-6 -top-6 w-24 h-24 bg-indigo-100 rounded-full opacity-50 blur-2xl"></div>
+                                        <div className="flex items-start gap-4 relative z-10">
+                                            <div className="w-10 h-10 bg-white shadow-sm text-2xl rounded-full flex items-center justify-center shrink-0">🇮🇳</div>
+                                            <div>
+                                                <h4 className="font-bold text-indigo-900 text-lg mb-2">India Office</h4>
+                                                <p className="text-sm text-indigo-800/80 leading-relaxed font-medium">
+                                                    HealthMitra Systems Pvt Ltd.<br />
+                                                    C/O JSS Academy of Technical Education,<br />
+                                                    C-20/1, Sector 62, Noida,<br />
+                                                    Uttar Pradesh 201309
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="mt-6 p-4 bg-slate-800 rounded-2xl text-center text-white">
+                                        <p className="text-sm font-medium mb-1">Need immediate assistance?</p>
+                                        <p className="text-xs text-slate-300 mb-3">Our support team usually replies within 5 minutes</p>
+                                        <button onClick={() => setIsNewTicketOpen(true)} className="w-full py-2.5 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-100 transition-colors">
+                                            Raise a Support Ticket
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

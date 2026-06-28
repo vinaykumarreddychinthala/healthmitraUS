@@ -101,7 +101,7 @@ function TermsModal({
       ],
     },
     medical_consultation: {
-      title: "Terms & Conditions for Doctor Consultation",
+      title: "Terms & Conditions for At Home Doctor Consultant",
       sections: [
         {
           title: "1. Consultation Agreement",
@@ -401,7 +401,7 @@ export function ServiceRequestForm({
   const hasAccess = allowedServices.length > 0;
 
   const requestedType = initialType || typeFromUrl;
-  const universallyAllowed = ["companion", "bill_reimbursement", "general", "emergency"];
+  const universallyAllowed = ["companion", "bill_reimbursement", "general", "emergency", "voucher"];
   const isRequestedTypeAllowed = requestedType && (allowedServices.includes(requestedType) || universallyAllowed.includes(requestedType));
   const isExplicitlyBlocked = requestedType && !isRequestedTypeAllowed && hasAccess;
   // Only use a default type if one is explicitly passed via URL/props; do NOT auto-select
@@ -445,6 +445,23 @@ export function ServiceRequestForm({
 
   const watchType = form.watch("type");
   const watchUrgency = form.watch("urgency");
+  const watchPreferredDate = form.watch("preferredDate");
+
+  // Returns true if the given slot's START hour is already in the past for today.
+  // If no date is provided, treat as today (always filter past slots).
+  // e.g. at 8:28 AM, the 7 AM and 8 AM slots are past.
+  const isSlotPast = (slotStartHour: number, dateStr?: string): boolean => {
+    const today = new Date();
+    if (dateStr) {
+      const selected = new Date(dateStr + 'T00:00:00'); // force local midnight
+      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      // Only filter for today; future dates always show all slots
+      if (selected.getTime() !== todayMidnight.getTime()) return false;
+    }
+    // Slot is past if its start hour has already begun (including partial hours)
+    return slotStartHour < today.getHours() ||
+      (slotStartHour === today.getHours() && today.getMinutes() > 0);
+  };
 
   useEffect(() => {
     if (!policyHolderPhone && userProfile?.phone) {
@@ -564,7 +581,7 @@ export function ServiceRequestForm({
   const getTitle = () => {
     const titles: Record<string, string> = {
       ambulance: "Book Ambulance Service",
-      medical_consultation: "Home Doctor Appointment",
+      medical_consultation: "At Home Doctor Consultant",
       diagnostic: "Book Diagnostic Test",
       caretaker: "Caretaker Services",
       nursing: "Nursing Procedures",
@@ -631,12 +648,13 @@ export function ServiceRequestForm({
                 </SelectTrigger>
                 <SelectContent>
                   {allowedServices.includes("ambulance") && <SelectItem value="ambulance">Ambulance Service</SelectItem>}
-                  {allowedServices.includes("medical_consultation") && <SelectItem value="medical_consultation">Home Doctor Service Appointment</SelectItem>}
+                  {allowedServices.includes("medical_consultation") && <SelectItem value="medical_consultation">At Home Doctor Consultant</SelectItem>}
                   {allowedServices.includes("diagnostic") && <SelectItem value="diagnostic">Diagnostic Test</SelectItem>}
                   {allowedServices.includes("caretaker") && <SelectItem value="caretaker">Caretaker Services</SelectItem>}
                   {allowedServices.includes("nursing") && <SelectItem value="nursing">Nursing Procedures</SelectItem>}
                   <SelectItem value="companion">Companion Service</SelectItem>
                   <SelectItem value="bill_reimbursement">Bill Reimbursement</SelectItem>
+                  <SelectItem value="voucher">Redeem Voucher</SelectItem>
                   <SelectItem value="general">General Request</SelectItem>
                 </SelectContent>
               </Select>
@@ -815,7 +833,11 @@ export function ServiceRequestForm({
 
                 {watchUrgency === "scheduled" && (
                   <div className="grid grid-cols-2 gap-4">
-                    <Input type="date" {...form.register("preferredDate")} />
+                    <Input
+                      type="date"
+                      min={new Date().toISOString().split('T')[0]}
+                      {...form.register("preferredDate")}
+                    />
                     <Select
                       onValueChange={(val) =>
                         form.setValue("preferredTimeSlot", val)
@@ -830,13 +852,16 @@ export function ServiceRequestForm({
                           const startMin = i % 2 === 0 ? "00" : "30";
                           const endHour = Math.floor((i + 1) / 2) % 24;
                           const endMin = (i + 1) % 2 === 0 ? "00" : "30";
-                          
+
+                          // Skip past slots when today is selected
+                          if (isSlotPast(startHour, watchPreferredDate)) return null;
+
                           const formatTime = (h: number, m: string) => {
                             const ampm = h >= 12 ? 'PM' : 'AM';
                             const hour12 = h % 12 || 12;
                             return `${hour12}:${m} ${ampm}`;
                           };
-                          
+
                           const label = `${formatTime(startHour, startMin)} - ${formatTime(endHour, endMin)}`;
                           return <SelectItem key={label} value={label}>{label}</SelectItem>;
                         })}
@@ -897,7 +922,11 @@ export function ServiceRequestForm({
                     </SelectContent>
                   </Select>
                   <div className="grid grid-cols-2 gap-4">
-                    <Input type="date" {...form.register("preferredDate")} />
+                    <Input 
+                      type="date" 
+                      min={new Date().toISOString().split('T')[0]} 
+                      {...form.register("preferredDate")} 
+                    />
                     <Select
                       onValueChange={(val) =>
                         form.setValue("preferredTimeSlot", val)
@@ -907,14 +936,28 @@ export function ServiceRequestForm({
                         <SelectValue placeholder="Time" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="8am-10am">8:00 AM - 10:00 AM</SelectItem>
-                        <SelectItem value="10am-12pm">10:00 AM - 12:00 PM</SelectItem>
-                        <SelectItem value="12pm-2pm">12:00 PM - 2:00 PM</SelectItem>
-                        <SelectItem value="2pm-4pm">2:00 PM - 4:00 PM</SelectItem>
-                        <SelectItem value="4pm-6pm">4:00 PM - 6:00 PM</SelectItem>
-                        <SelectItem value="6pm-8pm">6:00 PM - 8:00 PM</SelectItem>
-                        <SelectItem value="8pm-10pm">8:00 PM - 10:00 PM</SelectItem>
-                        <SelectItem value="10pm-12am">10:00 PM - 12:00 AM</SelectItem>
+                        {[
+                          { val: "7am-8am", label: "7:00 AM - 8:00 AM", hour: 7 },
+                          { val: "8am-9am", label: "8:00 AM - 9:00 AM", hour: 8 },
+                          { val: "9am-10am", label: "9:00 AM - 10:00 AM", hour: 9 },
+                          { val: "10am-11am", label: "10:00 AM - 11:00 AM", hour: 10 },
+                          { val: "11am-12pm", label: "11:00 AM - 12:00 PM", hour: 11 },
+                          { val: "12pm-1pm", label: "12:00 PM - 1:00 PM", hour: 12 },
+                          { val: "1pm-2pm", label: "1:00 PM - 2:00 PM", hour: 13 },
+                          { val: "2pm-3pm", label: "2:00 PM - 3:00 PM", hour: 14 },
+                          { val: "3pm-4pm", label: "3:00 PM - 4:00 PM", hour: 15 },
+                          { val: "4pm-5pm", label: "4:00 PM - 5:00 PM", hour: 16 },
+                          { val: "5pm-6pm", label: "5:00 PM - 6:00 PM", hour: 17 },
+                          { val: "6pm-7pm", label: "6:00 PM - 7:00 PM", hour: 18 },
+                          { val: "7pm-8pm", label: "7:00 PM - 8:00 PM", hour: 19 },
+                          { val: "8pm-9pm", label: "8:00 PM - 9:00 PM", hour: 20 },
+                          { val: "9pm-10pm", label: "9:00 PM - 10:00 PM", hour: 21 },
+                          { val: "10pm-11pm", label: "10:00 PM - 11:00 PM", hour: 22 },
+                          { val: "11pm-12am", label: "11:00 PM - 12:00 AM", hour: 23 },
+                        ].filter(slot => !isSlotPast(slot.hour, watchPreferredDate))
+                         .map(slot => (
+                          <SelectItem key={slot.val} value={slot.val}>{slot.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1028,7 +1071,11 @@ export function ServiceRequestForm({
                     rows={2}
                   />
                   <div className="grid grid-cols-2 gap-4">
-                    <Input type="date" {...form.register("preferredDate")} />
+                    <Input
+                      type="date"
+                      min={new Date().toISOString().split('T')[0]}
+                      {...form.register("preferredDate")}
+                    />
                     <Select
                       onValueChange={(val) =>
                         form.setValue("preferredTimeSlot", val)
@@ -1038,10 +1085,19 @@ export function ServiceRequestForm({
                         <SelectValue placeholder="Time slot" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="6-9">6 AM - 9 AM</SelectItem>
-                        <SelectItem value="9-12">9 AM - 12 PM</SelectItem>
-                        <SelectItem value="12-15">12 PM - 3 PM</SelectItem>
-                        <SelectItem value="15-18">3 PM - 6 PM</SelectItem>
+                        {/* Filter broad slots by their END hour — if current time has passed the slot end, hide it */}
+                        {!isSlotPast(9, watchPreferredDate) && (
+                          <SelectItem value="6-9">6 AM - 9 AM</SelectItem>
+                        )}
+                        {!isSlotPast(12, watchPreferredDate) && (
+                          <SelectItem value="9-12">9 AM - 12 PM</SelectItem>
+                        )}
+                        {!isSlotPast(15, watchPreferredDate) && (
+                          <SelectItem value="12-15">12 PM - 3 PM</SelectItem>
+                        )}
+                        {!isSlotPast(18, watchPreferredDate) && (
+                          <SelectItem value="15-18">3 PM - 6 PM</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1161,6 +1217,93 @@ export function ServiceRequestForm({
                     {...form.register("requirements")}
                     placeholder="Any specific instructions from doctor"
                     rows={2}
+                  />
+                </div>
+              </div>
+            )}
+            {/* ===== COMPANION SERVICES ===== */}
+            {watchType === "companion" && (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Requirement for Booking a Companion</Label>
+                  <Textarea
+                    {...form.register("requirements")}
+                    placeholder="Describe what you need the companion for..."
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <Label>Preferred Date</Label>
+                    <Input
+                      type="date"
+                      min={new Date().toISOString().split('T')[0]}
+                      {...form.register("preferredDate")}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label>Preferred Time</Label>
+                    <Input
+                      type="time"
+                      min={(() => {
+                        // When today is selected, restrict to times from now onwards
+                        const today = new Date();
+                        const todayStr = today.toISOString().split('T')[0];
+                        if (watchPreferredDate === todayStr) {
+                          const hh = String(today.getHours()).padStart(2, '0');
+                          const mm = String(today.getMinutes()).padStart(2, '0');
+                          return `${hh}:${mm}`;
+                        }
+                        return undefined;
+                      })()}
+                      {...form.register("preferredTimeSlot")}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label>How many hours?</Label>
+                  <Select onValueChange={(val) => form.setValue("duration", val)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select duration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2-hours">2 hours</SelectItem>
+                      <SelectItem value="4-hours">4 hours</SelectItem>
+                      <SelectItem value="8-hours">8 hours</SelectItem>
+                      <SelectItem value="12-hours">12 hours</SelectItem>
+                      <SelectItem value="24-hours">24 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3">
+                  <Label>Address</Label>
+                  <Input {...form.register("pickupAddressLine1")} placeholder="Full Address" />
+                  <Input {...form.register("pickupPincode")} placeholder="Pincode" maxLength={6} />
+                </div>
+
+                <div className="space-y-3">
+                  <Label>Phone Number</Label>
+                  <Input {...form.register("patientPhone", {
+                      onChange: (e) => {
+                        e.target.value = e.target.value.replace(/\D/g, "");
+                      }
+                    })} type="tel" maxLength={10} placeholder="Contact Number" />
+                </div>
+              </div>
+            )}
+
+            {/* ===== GENERAL REQUEST ===== */}
+            {watchType === "general" && (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Query / Request Details</Label>
+                  <Textarea
+                    {...form.register("description")}
+                    placeholder="Write about your query or request..."
+                    rows={4}
                   />
                 </div>
               </div>

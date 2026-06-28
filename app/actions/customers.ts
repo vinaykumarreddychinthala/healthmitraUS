@@ -287,7 +287,7 @@ export async function resetCustomerPassword(userId: string, newPassword: string)
     return { success: true, message: 'Password reset successfully' };
 }
 
-// --- GET CUSTOMERS WITH PLAN INFO (from dedicated customers table) ---
+// --- GET CUSTOMERS WITH PLAN INFO (from profiles & ecard_members) ---
 export async function getCustomers(filters?: {
     query?: string;
     planId?: string;
@@ -303,8 +303,26 @@ export async function getCustomers(filters?: {
     const to = from + limit - 1;
 
     let query = adminSupabase
-        .from('customers')
-        .select('*, plans(name)', { count: 'exact' });
+        .from('profiles')
+        .select(`
+            id,
+            full_name,
+            email,
+            phone,
+            status,
+            created_at,
+            role,
+            ecard_members (
+                plan_id,
+                member_id_code,
+                card_unique_id,
+                valid_from,
+                valid_till,
+                status,
+                plans (name)
+            )
+        `, { count: 'exact' })
+        .in('role', ['user', 'customer']);
 
     if (filters?.query) {
         query = query.or(
@@ -316,37 +334,49 @@ export async function getCustomers(filters?: {
         query = query.eq('status', filters.status);
     }
 
-    if (filters?.planId && filters.planId !== 'all') {
-        if (filters.planId === 'none') {
-            query = query.is('plan_id', null);
-        } else {
-            query = query.eq('plan_id', filters.planId);
-        }
-    }
-
     query = query.range(from, to).order('created_at', { ascending: false });
 
     const { data, error, count } = await query;
     if (error) return { success: false, error: error.message };
 
-    const customers = (data || []).map((c: any) => ({
-        id: c.id,
-        userId: c.user_id,
-        fullName: c.full_name || 'Unknown',
-        email: c.email,
-        phone: c.phone,
-        planId: c.plan_id,
-        planName: c.plan_name || c.plans?.name || null,
-        memberId: c.member_id_code,
-        cardUniqueId: c.card_unique_id,
-        amountPaid: c.amount_paid,
-        paymentMethod: c.payment_method,
-        transactionId: c.transaction_id,
-        validFrom: c.valid_from,
-        validTill: c.valid_till,
-        status: c.status || 'active',
-        createdAt: c.created_at,
-    }));
+    let customers = (data || []).map((p: any) => {
+        const members = Array.isArray(p.ecard_members) ? p.ecard_members : [];
+        members.sort((a: any, b: any) => {
+            if (a.status === 'active' && b.status !== 'active') return -1;
+            if (b.status === 'active' && a.status !== 'active') return 1;
+            return new Date(b.valid_from || 0).getTime() - new Date(a.valid_from || 0).getTime();
+        });
+        
+        const primaryPlan = members.length > 0 ? members[0] : null;
+
+        return {
+            id: p.id,
+            userId: p.id,
+            fullName: p.full_name || 'Unknown',
+            email: p.email,
+            phone: p.phone,
+            planId: primaryPlan?.plan_id || null,
+            planName: primaryPlan?.plans?.name || null,
+            memberId: primaryPlan?.member_id_code || null,
+            cardUniqueId: primaryPlan?.card_unique_id || null,
+            amountPaid: 0,
+            paymentMethod: null,
+            transactionId: null,
+            validFrom: primaryPlan?.valid_from || null,
+            validTill: primaryPlan?.valid_till || null,
+            planStatus: primaryPlan?.status || null,
+            status: p.status || 'active',
+            createdAt: p.created_at,
+        };
+    });
+
+    if (filters?.planId && filters.planId !== 'all') {
+        if (filters.planId === 'none') {
+            customers = customers.filter((c: any) => !c.planId);
+        } else {
+            customers = customers.filter((c: any) => c.planId === filters.planId);
+        }
+    }
 
     return { success: true, data: customers, totalCount: count || 0 };
 }
@@ -354,10 +384,9 @@ export async function getCustomers(filters?: {
 // --- GET CUSTOMER STATS ---
 export async function getCustomerStats() {
     const adminSupabase = await createAdminClient();
-    const { count: total }   = await adminSupabase.from('customers').select('*', { count: 'exact', head: true });
-    const { count: active }  = await adminSupabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'active');
-    const { count: expired } = await adminSupabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'expired');
-    return { total: total || 0, active: active || 0, expired: expired || 0 };
+    const { count: total }   = await adminSupabase.from('profiles').select('*', { count: 'exact', head: true }).in('role', ['user', 'customer']);
+    const { count: active }  = await adminSupabase.from('profiles').select('*', { count: 'exact', head: true }).in('role', ['user', 'customer']).eq('status', 'active');
+    return { total: total || 0, active: active || 0, expired: 0 };
 }
 
 

@@ -121,15 +121,15 @@ export async function sendPlanPurchaseWhatsApp(params: PlanPurchaseParams): Prom
         countryCode: '91',
         wid,
         bodyValues: {
-            // Keys must match the variable names defined in the authkey.io template
-            // For {{1}}, {{2}} etc. placeholders, authkey.io uses var1, var2...
-            var1: params.name,
+            // Keys must match the exact string inside the {{ }} placeholders.
+            // For {{1}}, Authkey expects the key to be "1".
+            "1": params.name,
             // Show full number with country code in the message body for readability
-            var2: params.phone.replace(/\D/g, '').length > 10
+            "2": params.phone.replace(/\D/g, '').length > 10
                 ? `+${params.phone.replace(/\D/g, '')}`
                 : `+91${params.phone.replace(/\D/g, '')}`,
-            var3: params.email,
-            var4: params.planUrl,
+            "3": params.email,
+            "4": params.planUrl,
         },
     });
 }

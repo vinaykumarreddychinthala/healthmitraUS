@@ -36,21 +36,20 @@ export async function updateUserProfile(formData: Record<string, any>) {
 
     if (!user) return { success: false, error: 'Not authenticated' };
 
-    // Strip out fields that should NOT be persisted
-    const {
-        current_password, new_password, confirm_password,
-        bank_confirm_account,
-        email_service_updates, email_reimbursement, email_wallet,
-        email_renewal, email_promo, email_newsletter,
-        sms_critical, sms_wallet, sms_appointments, sms_promo,
-        language, theme, two_factor_enabled,
-        email, // Don't update email from profile form
-        ...profileFields
-    } = formData;
+    // Prevent Mass Assignment / Privilege Escalation
+    // Only allow specific fields to be updated by the user
+    const ALLOWED_FIELDS = [
+        'avatar_url', 'full_name', 'phone', 'dob', 'blood_group', 'gender',
+        'height_cm', 'weight_kg', 'emergency_contact',
+        'address_line1', 'address_line2', 'city', 'state', 'pincode', 'country', 'landmark',
+        'bank_holder_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_branch', 'account_type',
+        'aadhaar_number', 'pan_number'
+    ];
 
-    // Only send non-empty values
+    // Only send non-empty values for allowed fields
     const updates: Record<string, any> = {};
-    for (const [key, value] of Object.entries(profileFields)) {
+    for (const key of ALLOWED_FIELDS) {
+        const value = formData[key];
         if (value !== undefined && value !== '') {
             updates[key] = value;
         }

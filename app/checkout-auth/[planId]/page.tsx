@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, use } from 'react';
+import { useState, use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader2, ArrowRight, ShieldCheck, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { Turnstile } from '@/components/ui/turnstile';
+import { createClient } from '@/lib/supabase/client';
 
 export default function CheckoutAuthPage({ params }: { params: Promise<{ planId: string }> }) {
     const resolvedParams = use(params);
@@ -23,10 +24,51 @@ export default function CheckoutAuthPage({ params }: { params: Promise<{ planId:
     const [otp, setOtp] = useState('');
     const [hash, setHash] = useState('');
 
+    // Skip OTP verification if the user is:
+    // 1. Already logged in via Supabase (buying a second plan from the customer panel)
+    // 2. Already verified in this session (sessionStorage flag set after first OTP)
+    useEffect(() => {
+        const skip = async () => {
+            // Check if logged in via Supabase
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                router.push(`/checkout/${resolvedParams.planId}`);
+                return;
+            }
+
+            // Fallback: check sessionStorage for a previously verified guest email
+            const stored = sessionStorage.getItem('checkout_user');
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    if (parsed?.verified && parsed?.email) {
+                        sessionStorage.setItem('checkout_user', JSON.stringify({
+                            ...parsed,
+                            planId: resolvedParams.planId,
+                        }));
+                        toast.success('Email already verified! Redirecting to checkout...');
+                        router.push(`/checkout/${resolvedParams.planId}`);
+                    }
+                } catch {
+                    // Malformed data — show the form normally
+                }
+            }
+        };
+        skip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleSendOTP = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name || !formData.email || !formData.phone) {
             toast.error('Please fill in all fields');
+            return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            toast.error('please enter valid mail id');
             return;
         }
 
@@ -148,25 +190,28 @@ export default function CheckoutAuthPage({ params }: { params: Promise<{ planId:
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-slate-700">Phone Number</label>
                                     <div className="flex gap-2">
-                                        <select
-                                            className="h-11 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring w-[130px] shrink-0"
+                                        <Input
+                                            type="text"
+                                            placeholder="+1"
+                                            value={formData.phone.split(' ')[0] || ''}
                                             onChange={(e) => {
-                                                const current = formData.phone.replace(/^(\+1|\+91)\s?/, '');
+                                                const current = formData.phone.substring(formData.phone.indexOf(' ') + 1);
                                                 setFormData({ ...formData, phone: e.target.value + ' ' + current });
                                             }}
-                                            defaultValue="+1"
-                                        >
-                                            <option value="+1">🇺🇸 +1 (US)</option>
-                                            <option value="+91">🇮🇳 +91 (IN)</option>
-                                        </select>
+                                            className="h-11 w-[80px] shrink-0 text-center"
+                                            maxLength={5}
+                                            required
+                                        />
                                         <Input
                                             type="tel"
                                             placeholder="Phone number"
-                                            value={formData.phone.replace(/^(\+1|\+91)\s?/, '')}
+                                            value={formData.phone.substring(formData.phone.indexOf(' ') + 1)}
                                             onChange={(e) => {
-                                                const prefix = formData.phone.match(/^(\+1|\+91)/)?.[0] || '+1';
-                                                setFormData({ ...formData, phone: prefix + ' ' + e.target.value });
+                                                const code = formData.phone.split(' ')[0] || '+1';
+                                                const nums = e.target.value.replace(/[^0-9]/g, '');
+                                                setFormData({ ...formData, phone: code + ' ' + nums });
                                             }}
+                                            maxLength={15}
                                             required
                                             className="h-11 flex-1"
                                         />

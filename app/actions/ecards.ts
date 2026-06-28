@@ -52,6 +52,17 @@ export async function getECards() {
             return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         };
 
+        const fmtDateMinusOne = (d: string | null | undefined) => {
+            if (!d) return 'N/A';
+            const parts = d.split('T')[0].split('-');
+            if (parts.length === 3) {
+                const dt = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+                dt.setUTCDate(dt.getUTCDate() - 1);
+                return dt.toLocaleDateString('en-IN', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
+            }
+            return fmtDate(d);
+        };
+
         return {
             id: m.id,
             user_id: m.user_id,
@@ -64,7 +75,7 @@ export async function getECards() {
             gender: m.gender,
             blood_group: m.blood_group || '',
             valid_from: fmtDate(m.valid_from),
-            valid_till: fmtDate(m.valid_till),
+            valid_till: fmtDateMinusOne(m.valid_till),
             status: m.status,
             plan_name: m.plans?.name || 'Health Plan',
             plan_price: m.plans?.price || 0,

@@ -29,7 +29,7 @@ export default function AuthLayout({
             <span className="text-teal-300">Holistic Healthcare</span>
           </h2>
           <p className="text-teal-100 text-lg leading-relaxed">
-            Access preventive care, manage insurance claims, and order medicines
+            Access preventive care, manage insurance claims, and order
             seamlessly. Join thousands of families securing their future with
             HealthMitra.
           </p>

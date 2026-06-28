@@ -20,7 +20,7 @@ interface ECardsViewProps {
 
 export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) {
     const searchParams = useSearchParams();
-    
+
     // Check if redirected here with an error
     useEffect(() => {
         if (searchParams?.get('error') === 'verification_required') {
@@ -30,33 +30,45 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
         }
     }, [searchParams]);
 
-    const [cards, setCards] = useState<ECardMember[]>(initialCards.map(c => ({
-        id: c.id,
-        name: c.member_name || c.name || 'Unknown',
-        relation: c.relation || 'Self',
-        dob: c.dob,
-        age: c.dob ? Math.floor((new Date().getTime() - new Date(c.dob).getTime()) / 31557600000) : c.age,
-        gender: c.gender,
-        bloodGroup: c.blood_group || '',
-        memberId: c.member_id || c.member_id_code || '',
-        planId: c.plan_id,
-        planName: c.plan_name || 'Health Plan',
-        planPrice: c.plan_price,
-        validFrom: c.valid_from || 'N/A',
-        validTill: c.valid_till || 'N/A',
-        policyNo: c.policy_number || '',
-        policyId: c.policy_id || '',
-        issuedDate: c.issued_date || new Date().toISOString(),
-        emergencyContact: c.emergency_contact || '9818823106',
-        coverageAmount: c.coverage_amount,
-        status: (c.status as any) || 'pending',
-        cardUniqueId: c.card_unique_id || c.card_number || `HM-${c.id.substring(0, 8).toUpperCase()}`,
-        planDescription: 'Comprehensive health coverage',
-        planFeatures: Array.isArray(c.plan_features) ? c.plan_features : [],
-        kycSubmitted: c.kycSubmitted || false,
-        adminVerified: c.adminVerified || false,
-        photoUrl: c.photo_url || undefined,
-    })));
+    const [cards, setCards] = useState<ECardMember[]>(initialCards.map(c => {
+        // Format a YYYY-MM-DD date string to DD/MM/YYYY for consistent display
+        const formatDate = (raw: string | null | undefined): string => {
+            if (!raw || raw === 'N/A') return 'N/A';
+            // Handle ISO strings like "2026-06-18T00:00:00Z"
+            const datePart = raw.split('T')[0];
+            const parts = datePart.split('-');
+            if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            return raw;
+        };
+
+        return {
+            id: c.id,
+            name: c.member_name || c.name || 'Unknown',
+            relation: c.relation || 'Self',
+            dob: c.dob,
+            age: c.dob ? Math.floor((new Date().getTime() - new Date(c.dob).getTime()) / 31557600000) : c.age,
+            gender: c.gender,
+            bloodGroup: c.blood_group || '',
+            memberId: c.member_id || c.member_id_code || '',
+            planId: c.plan_id,
+            planName: c.plan_name || 'Health Plan',
+            planPrice: c.plan_price,
+            validFrom: formatDate(c.valid_from),
+            validTill: formatDate(c.valid_till),
+            policyNo: c.policy_number || '',
+            policyId: c.policy_id || '',
+            issuedDate: c.issued_date || new Date().toISOString(),
+            emergencyContact: c.emergency_contact || '9818823106',
+            coverageAmount: c.coverage_amount,
+            status: (c.status as any) || 'pending',
+            cardUniqueId: c.card_unique_id || c.card_number || `HM-${c.id.substring(0, 8).toUpperCase()}`,
+            planDescription: 'Comprehensive health coverage',
+            planFeatures: Array.isArray(c.plan_features) ? c.plan_features : [],
+            kycSubmitted: c.kycSubmitted || false,
+            adminVerified: c.adminVerified || false,
+            photoUrl: c.photo_url || undefined,
+        };
+    }));
 
     // KYC data per memberId (for read-only display)
     const [kycDataMap, setKycDataMap] = useState<Record<string, any>>({});
@@ -116,7 +128,7 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
     const pendingCards = useMemo(() => cards.filter(c => !c.kycSubmitted), [cards]);
     const awaitingAdminCards = useMemo(() => cards.filter(c => c.kycSubmitted && !c.adminVerified), [cards]);
     const verifiedCards = useMemo(() => cards.filter(c => c.adminVerified), [cards]);
-    
+
     // Group by plan name to display exactly what they bought
     const planGroups = useMemo(() => {
         const groups = new Map<string, ECardMember[]>();
@@ -155,10 +167,13 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
                                 To unlock and access all Dashboard Services, please complete the details for all <strong>({cards.length}) member(s)</strong> included in your plan. <strong>({pendingCards.length}) member profile(s)</strong> is still pending completion. Fill in the required information to continue.
                             </p>
                             <p className="text-red-800 font-semibold text-sm mt-2">
-                                Pending Profiles: ({pendingCards.length}) of ({cards.length}) Member(s) Remaining. 
-                                <a href="/e-cards" className="underline text-red-600 hover:text-red-800 ml-1 font-bold cursor-pointer inline-block mt-1 sm:mt-0">
+                                Pending Profiles: ({pendingCards.length}) of ({cards.length}) Member(s) Remaining.
+                                <button
+                                    onClick={() => pendingCards.length > 0 && openKYCModal(pendingCards[0])}
+                                    className="underline text-red-600 hover:text-red-800 ml-1 font-bold cursor-pointer inline-block mt-1 sm:mt-0 bg-transparent border-none p-0"
+                                >
                                     Download E-Card / Fill Details
-                                </a>
+                                </button>
                             </p>
                         </div>
                     </div>
@@ -201,113 +216,113 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
                 // Get policy ID for this plan group (same for all cards in the group)
                 const policyId = planCards[0]?.policyId;
                 return (
-                <section key={planName} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-100 gap-3">
-                        <div>
-                            <h2 className="text-xl font-bold text-slate-800">{planName}</h2>
-                            <p className="text-sm text-slate-500 mt-1">Purchased slots: {planCards.length}</p>
-                            {policyId && (
-                                <div className="flex items-center gap-1.5 mt-2">
-                                    <Tag size={13} className="text-teal-600" />
-                                    <span className="text-xs font-semibold text-slate-600">Policy ID:</span>
-                                    <span className="font-mono text-xs font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full tracking-wide">{policyId}</span>
-                                </div>
+                    <section key={planName} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-4 border-b border-slate-100 gap-3">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-800">{planName}</h2>
+                                <p className="text-sm text-slate-500 mt-1">Purchased slots: {planCards.length}</p>
+                                {policyId && (
+                                    <div className="flex items-center gap-1.5 mt-2">
+                                        <Tag size={13} className="text-teal-600" />
+                                        <span className="text-xs font-semibold text-slate-600">Policy ID:</span>
+                                        <span className="font-mono text-xs font-bold text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full tracking-wide">{policyId}</span>
+                                    </div>
+                                )}
+                            </div>
+                            {planCards.every(c => c.kycSubmitted) ? (
+                                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-full flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-4 h-4" /> All Details Submitted
+                                </span>
+                            ) : (
+                                <span className="px-3 py-1 bg-amber-100 text-amber-700 text-sm font-bold rounded-full flex items-center gap-1.5">
+                                    <AlertCircle className="w-4 h-4" /> Incomplete
+                                </span>
                             )}
                         </div>
-                        {planCards.every(c => c.kycSubmitted) ? (
-                            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-full flex items-center gap-1.5">
-                                <CheckCircle2 className="w-4 h-4" /> All Details Submitted
-                            </span>
-                        ) : (
-                            <span className="px-3 py-1 bg-amber-100 text-amber-700 text-sm font-bold rounded-full flex items-center gap-1.5">
-                                <AlertCircle className="w-4 h-4" /> Incomplete
-                            </span>
-                        )}
-                    </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                        {planCards.map(card => {
-                            const isPending = !card.kycSubmitted;
-                            const isAwaitingVerification = card.kycSubmitted && !card.adminVerified;
-                            const isVerified = card.adminVerified;
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                            {planCards.map(card => {
+                                const isPending = !card.kycSubmitted;
+                                const isAwaitingVerification = card.kycSubmitted && !card.adminVerified;
+                                const isVerified = card.adminVerified;
 
-                            return (
-                                <div key={card.id} className="relative group">
-                                    {isPending ? (
-                                        // Pending UI - Empty Slot
-                                        <div className="h-[240px] rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center p-6 text-center hover:border-teal-400 hover:bg-teal-50/50 transition-colors">
-                                            <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mb-4">
-                                                <UserPlus className="w-8 h-8 text-slate-500" />
-                                            </div>
-                                            <h3 className="text-lg font-bold text-slate-700 mb-1">
-                                                {card.relation} Slot
-                                            </h3>
-                                            <p className="text-sm text-slate-500 mb-5">
-                                                Empty slot. Please fill details to generate the e-card.
-                                            </p>
-                                            <button
-                                                onClick={() => openKYCModal(card)}
-                                                className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2.5 rounded-xl transition-all shadow-md shadow-teal-200"
-                                            >
-                                                Fill Details <ChevronRight className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        // Filled Card UI
-                                        <div className="space-y-3">
-                                            <ECardFlip
-                                                card={card}
-                                                kycStatus={true}
-                                                onDownloadClick={(type) => handleDownload(card, type)}
-                                                onCompleteKycClick={() => {}}
-                                            />
-                                            {/* Action bar under card */}
-                                            <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 flex items-center justify-between gap-3">
-                                                <div className="flex items-center gap-2.5">
-                                                    {isVerified ? (
-                                                        <>
-                                                            <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
-                                                                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-xs font-semibold text-emerald-700">Verified by Admin</p>
-                                                                <p className="text-[10px] text-slate-400">Reimbursements active</p>
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
-                                                                <Clock className="w-4 h-4 text-amber-600" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-xs font-semibold text-amber-700">Awaiting Admin Verification</p>
-                                                                <p className="text-[10px] text-slate-400">Details locked</p>
-                                                            </div>
-                                                        </>
-                                                    )}
+                                return (
+                                    <div key={card.id} className="relative group">
+                                        {isPending ? (
+                                            // Pending UI - Empty Slot
+                                            <div className="h-[240px] rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center p-6 text-center hover:border-teal-400 hover:bg-teal-50/50 transition-colors">
+                                                <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mb-4">
+                                                    <UserPlus className="w-8 h-8 text-slate-500" />
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => setKycViewModal({ open: true, memberId: card.id, memberName: card.name })}
-                                                        className="text-xs text-teal-600 hover:text-teal-700 font-medium px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors"
-                                                    >
-                                                        View Details
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setEditReqModal({ open: true, memberId: card.id, memberName: card.name })}
-                                                        className="text-xs text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
-                                                    >
-                                                        Request Edit
-                                                    </button>
+                                                <h3 className="text-lg font-bold text-slate-700 mb-1">
+                                                    {card.relation} Slot
+                                                </h3>
+                                                <p className="text-sm text-slate-500 mb-5">
+                                                    Empty slot. Please fill details to generate the e-card.
+                                                </p>
+                                                <button
+                                                    onClick={() => openKYCModal(card)}
+                                                    className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-2.5 rounded-xl transition-all shadow-md shadow-teal-200"
+                                                >
+                                                    Fill Details <ChevronRight className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            // Filled Card UI
+                                            <div className="space-y-3">
+                                                <ECardFlip
+                                                    card={card}
+                                                    kycStatus={true}
+                                                    onDownloadClick={(type) => handleDownload(card, type)}
+                                                    onCompleteKycClick={() => { }}
+                                                />
+                                                {/* Action bar under card */}
+                                                <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 flex items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-2.5">
+                                                        {isVerified ? (
+                                                            <>
+                                                                <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
+                                                                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-semibold text-emerald-700">Verified by Admin</p>
+                                                                    <p className="text-[10px] text-slate-400">Reimbursements active</p>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center">
+                                                                    <Clock className="w-4 h-4 text-amber-600" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-semibold text-amber-700">Awaiting Admin Verification</p>
+                                                                    <p className="text-[10px] text-slate-400">Details locked</p>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => setKycViewModal({ open: true, memberId: card.id, memberName: card.name })}
+                                                            className="text-xs text-teal-600 hover:text-teal-700 font-medium px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors"
+                                                        >
+                                                            View Details
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setEditReqModal({ open: true, memberId: card.id, memberName: card.name })}
+                                                            className="text-xs text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+                                                        >
+                                                            Request Edit
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </section>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
                 );
             })}
 

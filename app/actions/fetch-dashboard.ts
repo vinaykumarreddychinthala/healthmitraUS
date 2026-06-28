@@ -109,15 +109,28 @@ export async function fetchDashboardData(): Promise<
     const members = membersRes.data || [];
     const activeMembers = members.filter((m: any) => m.status === "active");
 
-    // Calculate Active Plans (Logic: Find all members for Self with a plan, including those pending KYC)
-    console.log("DASHBOARD MEMBERS:", JSON.stringify(members, null, 2));
-    const selfMembers = members.filter((m: any) => 
-      m.relation?.toLowerCase() === "self" && 
+    // Group active/pending members by their card/purchase to get unique plans
+    const activeAndPendingMembers = members.filter((m: any) => 
       m.plans && 
       (m.status === "active" || m.status === "pending")
     );
+
+    const planGroups = new Map<string, any>();
+    activeAndPendingMembers.forEach((member: any) => {
+        const key = member.card_unique_id || (member.plan_id + "_" + (member.valid_from || member.id));
+        if (!planGroups.has(key)) {
+            planGroups.set(key, member);
+        } else {
+            // Prefer "self" to be the representative member for the plan card
+            if (member.relation?.toLowerCase() === "self") {
+                planGroups.set(key, member);
+            }
+        }
+    });
+
+    const representativeMembers = Array.from(planGroups.values());
     
-    let activePlans = selfMembers.map((member: any) => {
+    let activePlans = representativeMembers.map((member: any) => {
       const planData = member.plans;
       let daysRemaining = 0;
       if (member.valid_till) {
@@ -132,7 +145,8 @@ export async function fetchDashboardData(): Promise<
         }
       }
       return {
-        id: planData.id,
+        id: member.id || planData.id,
+        planId: planData.id,
         name: planData.name,
         status: member.status,
         validUntil: member.valid_till,
@@ -147,11 +161,18 @@ export async function fetchDashboardData(): Promise<
     // Include plans from customers table that aren't already captured in ecard_members
     const customerData = customersRes.data || [];
     if (customerData.length > 0) {
-      const activePlanIds = new Set(activePlans.map((p: any) => p.id));
+      // Count instances of each plan_id in activePlans (from ecard_members)
+      const activePlanCounts: Record<string, number> = {};
+      activePlans.forEach((p: any) => {
+        const pId = p.planId || p.id;
+        activePlanCounts[pId] = (activePlanCounts[pId] || 0) + 1;
+      });
       
-      const extraPlans = customerData
-        .filter((c: any) => !activePlanIds.has(c.plan_id))
-        .map((c: any) => {
+      const extraPlans: any[] = [];
+      customerData.forEach((c: any) => {
+        if (activePlanCounts[c.plan_id] && activePlanCounts[c.plan_id] > 0) {
+          activePlanCounts[c.plan_id] -= 1;
+        } else {
           let daysRemaining = 0;
           if (c.valid_till) {
             const validTillDate = new Date(c.valid_till);
@@ -162,15 +183,16 @@ export async function fetchDashboardData(): Promise<
               );
             }
           }
-          return {
-            id: c.plan_id,
+          extraPlans.push({
+            id: c.id || c.plan_id,
             name: c.plan_name || "Active Plan",
             status: c.status,
             validUntil: c.valid_till,
             daysRemaining,
             coverageAmount: 0,
-          };
-        });
+          });
+        }
+      });
         
       activePlans = [...activePlans, ...extraPlans];
     }

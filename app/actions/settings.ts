@@ -14,10 +14,34 @@ export async function getSystemSettings() {
         return { success: false, error: error.message };
     }
 
-    // Convert to flat object
-    const settings: Record<string, string> = {};
+    const defaultSettings: Record<string, string> = {
+        site_name: process.env.NEXT_PUBLIC_SITE_NAME || 'HealthMitra',
+        site_tagline: process.env.NEXT_PUBLIC_SITE_TAGLINE || 'Your Trusted Healthcare Partner',
+        timezone: process.env.NEXT_PUBLIC_TIMEZONE || 'Asia/Kolkata',
+        date_format: process.env.NEXT_PUBLIC_DATE_FORMAT || 'DD/MM/YYYY',
+        support_email: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'support@healthmitraus.com',
+        support_phone: process.env.NEXT_PUBLIC_SUPPORT_PHONE || '1800-123-4567',
+        emergency_hotline: process.env.NEXT_PUBLIC_EMERGENCY_HOTLINE || '102',
+        whatsapp_number: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '',
+        contact_address: process.env.NEXT_PUBLIC_CONTACT_ADDRESS || '',
+        facebook_url: process.env.NEXT_PUBLIC_FACEBOOK_URL || '',
+        twitter_url: process.env.NEXT_PUBLIC_TWITTER_URL || '',
+        instagram_url: process.env.NEXT_PUBLIC_INSTAGRAM_URL || '',
+        youtube_url: process.env.NEXT_PUBLIC_YOUTUBE_URL || '',
+        smtp_host: process.env.SMTP_HOST || '',
+        smtp_port: process.env.SMTP_PORT || '',
+        smtp_user: process.env.SMTP_USER || '',
+        smtp_password: process.env.SMTP_PASS || '',
+        email_from_name: process.env.EMAIL_FROM_NAME || 'HealthMitra',
+        email_from_address: process.env.EMAIL_FROM_ADDRESS || process.env.SMTP_FROM || process.env.SMTP_USER || '',
+    };
+
+    // Convert to flat object with defaults
+    const settings: Record<string, string> = { ...defaultSettings };
     data?.forEach((item: any) => {
-        if (!item.is_secure) settings[item.key] = item.value;
+        if (!item.is_secure && item.value && item.value.trim() !== '') {
+            settings[item.key] = item.value;
+        }
     });
 
     return { success: true, data: settings };

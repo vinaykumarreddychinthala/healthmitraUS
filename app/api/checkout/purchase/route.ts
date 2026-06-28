@@ -5,9 +5,11 @@ import {
     planPurchaseConfirmationTemplate,
     confirmationOfPlanPurchaseTemplate,
     planPurchaseWelcomeTemplate,
-    paymentReceiptTemplate
+    paymentReceiptTemplate,
+    planRepurchaseConfirmationTemplate
 } from '@/lib/email-templates';
 import { validatePromoCode } from '@/app/actions/coupons';
+import { sendPlanPurchaseWhatsApp } from '@/lib/whatsapp';
 
 /** Generate a unique Member ID: MEM-XXXXX (5 random digits) */
 function generateMemberId(): string {
@@ -296,9 +298,7 @@ export async function POST(request: Request) {
             const gatewayName = paymentMethod === 'razorpay' ? 'Razorpay' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'stripe' ? 'Stripe' : 'EasePay';
             
             // Construct plan details page URL
-            const host = request.headers.get('host') || 'healthmitra.co.in';
-            const protocol = request.headers.get('x-forwarded-proto') || 'https';
-            const domain = `${protocol}://${host}`;
+            const domain = process.env.NEXT_PUBLIC_APP_URL || 'https://healthmitraus.com';
             const planUrl = plan.slug ? `${domain}/plans/${plan.slug}` : `${domain}/plans`;
 
             // 1️⃣ Plan Purchase Welcome Email
@@ -323,8 +323,13 @@ export async function POST(request: Request) {
                     to: user.email,
                     subject: `Confirmation of Your HealthMitra Plan Purchase`,
                     devData: { 'Email': user.email, 'Note': 'Existing user — password unchanged' },
-                    html: confirmationOfPlanPurchaseTemplate({
+                    html: planRepurchaseConfirmationTemplate({
+                        customerName: name,
                         planName: plan.name,
+                        transactionId: transactionId || 'N/A',
+                        amount: totalAmount,
+                        partnerName: gatewayName,
+                        currency: 'USD',
                         planUrl
                     })
                 });
@@ -341,9 +346,29 @@ export async function POST(request: Request) {
                     transactionId: transactionId || 'N/A',
                     date: new Date().toLocaleDateString(),
                     planName: plan.name,
-                    amount: finalAmount
+                    amount: finalAmount,
+                    currency: 'USD',
+                    userId: isFirstTimeUser ? user.email : undefined,
+                    password: isFirstTimeUser ? generatedPassword : undefined
                 })
             });
+
+            // Send WhatsApp confirmation (non-blocking — failure won't affect purchase)
+            const phone = user.user_metadata?.phone;
+            if (phone) {
+                sendPlanPurchaseWhatsApp({
+                    name: name,
+                    phone: phone,
+                    email: user.email,
+                    planUrl,
+                }).then(result => {
+                    if (!result.success) {
+                        console.warn('[WhatsApp] Plan purchase notification failed:', result.error);
+                    }
+                }).catch(err => {
+                    console.error('[WhatsApp] Unexpected error sending plan purchase message:', err);
+                });
+            }
         }
 
         return NextResponse.json({

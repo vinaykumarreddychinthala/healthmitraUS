@@ -27,6 +27,19 @@ export function DiagnosticBookingWizard({ isOpen, onClose, testCatalog = [] }: D
     const [selectedTests, setSelectedTests] = useState<any[]>([]);
     const [testSearch, setTestSearch] = useState("");
     const [collectionType, setCollectionType] = useState("home");
+    const [bookingDate, setBookingDate] = useState("");
+
+    // Returns true if the slot's start hour is already in the past.
+    // If no date is selected, treats as today by default.
+    const isSlotPastWizard = (slotStartHour: number): boolean => {
+        const now = new Date();
+        if (bookingDate) {
+            const todayStr = now.toISOString().split('T')[0];
+            if (bookingDate !== todayStr) return false;
+        }
+        return slotStartHour < now.getHours() ||
+            (slotStartHour === now.getHours() && now.getMinutes() > 0);
+    };
 
     // Search Logic
     const filteredTests = testSearch.length > 1
@@ -184,7 +197,13 @@ export function DiagnosticBookingWizard({ isOpen, onClose, testCatalog = [] }: D
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Preferred Date *</Label>
-                                <Input type="date" className="block w-full" />
+                                <Input
+                                    type="date"
+                                    min={new Date().toISOString().split('T')[0]}
+                                    className="block w-full"
+                                    value={bookingDate}
+                                    onChange={(e) => setBookingDate(e.target.value)}
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label>Time Slot *</Label>
@@ -193,8 +212,13 @@ export function DiagnosticBookingWizard({ isOpen, onClose, testCatalog = [] }: D
                                         <SelectValue placeholder="Select Slot" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="morning">Morning (8AM - 12PM)</SelectItem>
-                                        <SelectItem value="afternoon">Afternoon (12PM - 4PM)</SelectItem>
+                                        {/* 8 AM is the start of morning — hide if already past */}
+                                        {!isSlotPastWizard(12) && (
+                                            <SelectItem value="morning">Morning (8AM - 12PM)</SelectItem>
+                                        )}
+                                        {!isSlotPastWizard(16) && (
+                                            <SelectItem value="afternoon">Afternoon (12PM - 4PM)</SelectItem>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
