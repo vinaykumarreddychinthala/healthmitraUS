@@ -315,7 +315,7 @@ export async function POST(request: Request) {
                     password: isFirstTimeUser ? generatedPassword : '',
                     planName: plan.name,
                     transactionId: transactionId || 'N/A',
-                    amount: totalAmount,
+                    amount: finalAmount,
                     currency: 'USD',
                     planUrl
                 })
