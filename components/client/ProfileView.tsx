@@ -220,11 +220,11 @@ export default function ProfileView({ profile, initialTab = 'personal' }: Profil
         }
 
         // KYC validation (only if filled)
-        if (formData.aadhaar_number && !/^\d{12}$/.test(formData.aadhaar_number.replace(/\s/g, ''))) {
-            newErrors.aadhaar_number = 'Aadhaar must be 12 digits';
+        if (formData.aadhaar_number && formData.aadhaar_number.replace(/\s/g, '').length < 4) {
+            newErrors.aadhaar_number = 'Aadhaar/ID must be at least 4 digits';
         }
-        if (formData.pan_number && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.pan_number.toUpperCase())) {
-            newErrors.pan_number = 'Invalid PAN format';
+        if (formData.pan_number && formData.pan_number.length < 4) {
+            newErrors.pan_number = 'Invalid PAN/Tax ID format';
         }
 
         // Password validation (only if changing password)

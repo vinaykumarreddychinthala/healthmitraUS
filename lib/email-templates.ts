@@ -277,7 +277,7 @@ export const franchiseWelcomeTemplate = ({ franchiseName, userId, password }: an
 `;
 
 // 6. Mobile Whatsapp Msg
-export const generateWhatsAppPurchaseMsg = (name: string, amount: string | number) => 
+export const generateWhatsAppPurchaseMsg = (name: string, amount: string | number) =>
   `Dear ${name}, Thank you for purchasing your Preventive Health care Plan from HealthMitra, Using your Banking to pay for INR ${amount}. Regards HealthMitra 9818823106.`;
 
 // 7. Message post bill approved
@@ -425,62 +425,97 @@ export const customerServiceApprovedTemplate = ({ customerName, type, ticketId, 
 `;
 
 // 12. Plan Purchase & Receipts
-export const planPurchaseConfirmationTemplate = ({ customerName, userId, password, planName, transactionId, amount, partnerName, currency, planUrl }: any) => `
-<div style="font-family: sans-serif; max-width: 600px; margin: auto;">
+export const planPurchaseConfirmationTemplate = ({ customerName, userId, password, planName, transactionId, amount, partnerName, currency, planUrl }: any) => {
+  const currencySymbol = currency === 'INR' ? '₹' : '$';
+  return `
+<div style="font-family: sans-serif; font-size: 14px;">
   <p>Dear ${customerName},</p>
-  <p>Greetings of the Day from HealthMitra.</p>
-  <p>Your user id is ${userId} and Password is ${password} (do not share with anyone).</p>
-  <p>Thank you for purchasing HealthMitra preventive healthcare membership ${planName} for your family through our payment partner (${partnerName || 'EaseBuzz'}) via transaction id (${transactionId}) for ${currency || 'INR'} (${amount}).</p>
-  <p>Below mentioned plan details are for your reference. ${planName}</p>
-  <p>How to Use HealthMitra WebCRM <a href="https://youtube.com/playlist?list=PLJ901-wtAm8ufH3GDhLxZOeb-zTfWBfCp&si=oOnp6JXsDw0JNLAb">https://youtube.com/playlist?list=PLJ901-wtAm8ufH3GDhLxZOeb-zTfWBfCp&si=oOnp6JXsDw0JNLAb</a>.</p>
-  <p>To start utilizing HealthMitra services immediately, please download your e-card(s) using above login details. You can print a copy of your e-card(s).For any further assistance, please call our helpdesk at (+91) 9818823106.</p>
-  <p>Linked Herein are the Terms and Conditions for Refund and Cancellation for the HealthMitraUS Plan <a href="https://healthmitraus.com/refund-cancellation">https://healthmitraus.com/refund-cancellation</a></p>
-  <p>DISCLAIMER: <strong>This is an auto generated mail please do not reply to this email.</strong> In case you have any queries/clarifications, please email us at service@healthmitraus.com or call our helpdesk at (+91) 9818823106 between 8 am to 8 pm.</p>
   <br/>
-  <p>Thanks and Regards,</p>
+  <p>We extend our heartfelt appreciation for selecting our premium healthcare package and successfully completing the payment process. Your trust and confidence in our services mean the world to us. Rest assured, your health and well-being have become our topmost priority.</p>
+  <br/>
+  <p>By investing in our healthcare package, you have taken a significant step towards securing a brighter and healthier future. We are committed to providing you with exceptional care and support, tailored to your unique needs.</p>
+  <br/>
+  <p>We are delighted to inform you that you have purchased our HealthMitra preventive healthcare membership ${planName} for your family. The payment was made through our esteemed payment partner, ${partnerName || 'EasePay'} (Payment Gateway Name), with the transaction ID ${transactionId}, for an amount of ${currencySymbol} ${amount}.</p>
+  <br/>
+  <p>To ensure immediate access to HealthMitra services, we have generated your user ID as ${userId}, with the password set as ${password} (please keep this information confidential).</p>
+  <br/>
+  <p>Kindly note the following plan details for your reference:</p>
+  <br/>
+  <p>Plan: ${planName} ${planUrl ? `(<a href="${planUrl}">Plan Purchased Link</a>)` : ''}</p>
+  <br/>
+  <p>To commence utilizing HealthMitra services promptly, we kindly request you to download your temporary e-card(s) using the provided login details. You can print a copy of your e-card(s) for temporary usage while we process and dispatch your permanent membership card(s), which will reach you shortly. Please note that the temporary e-card(s) will remain valid for the next 30 days. For any further assistance, our dedicated helpdesk is available at (+91) 9818823106.</p>
+  <br/>
+  <p>Once again, thank you for choosing HealthMitra. We are honored to have you as a valued member of our healthcare family. We look forward to providing you with exceptional services and ensuring your well-being.</p>
+  <br/>
+  <p>DISCLAIMER: Please be aware that this email is auto-generated; therefore, kindly refrain from replying to this email address. If you have any queries or require clarifications, please reach out to us at service@healthmitraus.com or contact our helpdesk at (+91) 9818823106/ +1 Add US number, available between 8 am to 8 pm.</p>
+  <br/>
+  <p>Warm regards,</p>
+  <br/>
   <p>Team HealthMitra</p>
 </div>
 `;
+};
 
-export const planRepurchaseConfirmationTemplate = ({ customerName, planName, transactionId, amount, partnerName, currency, planUrl }: any) => `
-<div style="font-family: sans-serif; max-width: 600px; margin: auto;">
+
+export const planRepurchaseConfirmationTemplate = ({ customerName, planName, transactionId, amount, partnerName, currency, planUrl }: any) => {
+  const currencySymbol = currency === 'INR' ? '₹' : '$';
+  return `
+<div style="font-family: sans-serif; font-size: 14px;">
   <p>Dear ${customerName},</p>
+  <br/>
   <p>Greetings of the Day from HealthMitra.</p>
+  <br/>
   <p>You can use your old credentials to login into the customer panel.</p>
-  <p>Thank you for purchasing HealthMitra preventive healthcare membership ${planName} for your family through our payment partner (${partnerName || 'EaseBuzz'}) via transaction id (${transactionId}) for ${currency || 'INR'} (${amount}).</p>
+  <br/>
+  <p>Thank you for purchasing HealthMitra preventive healthcare membership ${planName} for your family through our payment partner (${partnerName || 'EaseBuzz'}) via transaction id (${transactionId}) for ${currencySymbol} (${amount}).</p>
+  <br/>
   <p>Below mentioned plan details are for your reference. ${planName}</p>
+  <br/>
   <p>How to Use HealthMitra WebCRM <a href="https://youtube.com/playlist?list=PLJ901-wtAm8ufH3GDhLxZOeb-zTfWBfCp&si=oOnp6JXsDw0JNLAb">https://youtube.com/playlist?list=PLJ901-wtAm8ufH3GDhLxZOeb-zTfWBfCp&si=oOnp6JXsDw0JNLAb</a>.</p>
-  <p>To start utilizing HealthMitra services immediately, please download your e-card(s) using above login details. You can print a copy of your e-card(s).For any further assistance, please call our helpdesk at (+91) 9818823106.</p>
+  <br/>
+  <p>To start utilizing HealthMitra services immediately, please download your e-card(s) using above login details. You can print a copy of your e-card(s). For any further assistance, please call our helpdesk at (+91) 9818823106.</p>
+  <br/>
   <p>Linked Herein are the Terms and Conditions for Refund and Cancellation for the HealthMitraUS Plan <a href="https://healthmitraus.com/refund-cancellation">https://healthmitraus.com/refund-cancellation</a></p>
-  <p>DISCLAIMER: <strong>This is an auto generated mail please do not reply to this email.</strong> In case you have any queries/clarifications, please email us at service@healthmitraus.com or call our helpdesk at (+91) 9818823106 between 8 am to 8 pm.</p>
+  <br/>
+  <p>DISCLAIMER: This is an auto generated mail please do not reply to this email. In case you have any queries/clarifications, please email us at service@healthmitraus.com or call our helpdesk at (+91) 9818823106 between 8 am to 8 pm.</p>
   <br/>
   <p>Thanks and Regards,</p>
+  <br/>
   <p>Team HealthMitra</p>
 </div>
 `;
+};
+
 
 export const planPurchaseWelcomeTemplate = ({ customerName, userId, password, planName, transactionId, amount, currency, planUrl }: any) => `
-<div style="font-family: sans-serif; max-width: 600px; margin: auto;">
-  <p>Subject: Welcome to HealthMitra - Your ${planName} Plan Membership Details</p>
+<div style="font-family: sans-serif; max-width: 800px;">
   <p>Dear ${customerName},</p>
+  <br/>
   <p>Greetings from HealthMitra!</p>
-  <p>We are pleased to confirm your purchase of the HealthMitra Preventive Healthcare Membership - <strong>${planName}</strong>${planUrl ? ` (<a href="${planUrl}">View Plan Details</a>)` : ''}. Your transaction was successfully processed through our payment partner with Transaction ID: ${transactionId} for ${currency || 'USD'} ${amount}</p>
+  <br/>
+  <p>We are pleased to confirm your purchase of the HealthMitra Preventive Healthcare Membership - <a href="${planUrl || '#'}">${planName}</a>. Your transaction was successfully processed through our payment partner with Transaction ID: ${transactionId} for ${currency || 'INR'} ${amount}</p>
+  <br/>
   <p><strong>Your Account Details:</strong></p>
-  <ul>
-    <li>User ID: ${userId}</li>
-    <li>Password: ${password} (Please keep this information confidential)</li>
-  </ul>
+  <br/>
+  <p style="margin: 0;">&#8226; User ID: <a href="mailto:${userId}">${userId}</a></p>
+  <p style="margin: 0;">&#8226; Password: ${password || '(Your existing password)'} (Please keep this information confidential)</p>
+  <br/>
   <p><strong>How to Get Started:</strong></p>
-  <ol>
-    <li><strong>Download Your e-Card:</strong> Log in using the above credentials to download and print your e-card(s).</li>
-    <li><strong>Explore WebCRM:</strong> Learn how to use HealthMitra’s WebCRM by watching our video tutorials.</li>
-  </ol>
+  <br/>
+  <p style="margin: 0;">1. <strong>Download Your e-Card:</strong> Log in using the above credentials to download and print your e-card(s).</p>
+  <p style="margin: 0;">2. <strong>Explore WebCRM:</strong> Learn how to use HealthMitra’s WebCRM by watching our <a href="https://youtube.com/playlist?list=PLJ901-wtAm8ufH3GDhLxZOeb-zTfWBfCp&si=oOnp6JXsDw0JNLAb">video tutorials</a>.</p>
+  <br/>
   <p>For any questions or further assistance, please don't hesitate to reach out to our helpdesk at (+91) 9818823106 between 8 AM and 8 PM.</p>
-  <p>You can review the Terms and Conditions for Refund and Cancellation for your HealthMitra Plan at your convenience.</p>
-  <p>Please note: This is an automated email; responses to this email are not monitored. For any inquiries, please contact us at service@healthmitraus.com.</p>
+  <br/>
+  <p>You can review the <a href="https://healthmitraus.com/refund-cancellation">Terms and Conditions for Refund and Cancellation</a> for your HealthMitra Plan at your convenience.</p>
+  <br/>
+  <p>Please note: This is an automated email; responses to this email are not monitored. For any inquiries, please contact us at <a href="mailto:[EMAIL_ADDRESS]">[EMAIL_ADDRESS]</a></p>
+  <br/>
   <p>Thank you for choosing HealthMitra. We are committed to supporting your family’s health and well-being.</p>
   <br/>
-  <p>Best regards,<br/><strong>Team HealthMitra</strong></p>
+  <br/>
+  <p style="margin: 0;">Best regards,</p>
+  <p style="margin: 0;">Team HealthMitra</p>
 </div>
 `;
 
@@ -500,33 +535,73 @@ export const confirmationOfPlanPurchaseTemplate = ({ planName, planUrl }: any) =
 </div>
 `;
 
-export const paymentReceiptTemplate = ({ customerName, customerPhone, customerEmail, transactionId, date, planName, amount, currency, userId, password }: any) => `
-<div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #ccc; padding: 20px;">
-  <h2 style="margin-top: 0;">Payment Receipt</h2>
-  <p>Hey , ${customerName}. Thank you for Purchasing your Preventive Health Plan from us we’re glad you did.</p>
-  ${userId && password ? `
-  <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
-    <h3 style="margin-top: 0; color: #0f766e;">Your Login Credentials</h3>
-    <p style="margin: 5px 0;"><strong>User ID (Email):</strong> ${userId}</p>
-    <p style="margin: 5px 0;"><strong>Password:</strong> ${password}</p>
-    <p style="margin: 5px 0; font-size: 12px; color: #666;">(Please log in to download your e-cards)</p>
-  </div>
-  ` : `
-  <p>Your login credentials remain the same. You can log in using your registered email to download your e-cards.</p>
-  `}
-  <hr/>
-  <p><strong>Payment No.</strong><br/>${transactionId}</p>
-  <p><strong>Payment Date</strong><br/>${date}</p>
-  <hr/>
-  <p><strong>Client</strong><br/>${customerName}<br/>(+91) ${customerPhone}<br/>${customerEmail}</p>
-  <p><strong>Payment To</strong><br/>Health Mitra<br/>(+91) 9818823106<br/>service@healthmitraus.com</p>
-  <p><strong>Description</strong><span style="float: right;"><strong>Amount</strong></span></p>
-  <hr/>
-  <p>${planName}<span style="float: right;">${currency === 'INR' ? '₹' : '$'} ${amount}</span></p>
-  <hr/>
-  <p>Total: <span style="float: right;"><strong>${currency === 'INR' ? '₹' : '$'} ${amount}</strong></span></p>
+export const paymentReceiptTemplate = ({ customerName, customerPhone, customerEmail, transactionId, date, planName, amount, basePrice, discount, tax, currency, userId, password, partnerName }: any) => {
+  const currencySymbol = currency === 'INR' ? '₹' : '$';
+  const basePriceVal = basePrice ?? amount;
+  const discountVal = discount ?? '0.00';
+  const taxVal = tax ?? '0.00';
+  return `
+<div style="font-family: sans-serif; font-size: 14px;">
+  <p>Hey , ${customerName}. Thank you for Purchasing your Preventive Health Plan from us we're glad you did.An Email has been sent to your registered Email ID with your User ID and Password .Kindly update the same.</p>
+  <br/>
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 20px;">
+    <tr>
+      <td width="50%" valign="top">
+        <p style="margin: 0;">Payment No.</p>
+        <p style="margin: 0;">${transactionId}</p>
+        <br/>
+        <p style="margin: 0;">Client</p>
+        <p style="margin: 0;">${customerName}</p>
+        <p style="margin: 0;">${customerPhone}</p>
+        <p style="margin: 0;">${customerEmail}</p>
+      </td>
+      <td width="50%" valign="top" align="right">
+        <p style="margin: 0;">Payment Date</p>
+        <p style="margin: 0;">${date}</p>
+        <br/><br/>
+        <p style="margin: 0;">Payment To</p>
+        <p style="margin: 0;">Health Mitra</p>
+        <p style="margin: 0;">(+91) 9818823106</p>
+        <p style="margin: 0;">service@healthmitraus.com</p>
+      </td>
+    </tr>
+  </table>
+  
+  <br/><br/>
+  
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td width="50%" valign="top">
+        <p style="margin: 0;">Description</p>
+      </td>
+      <td width="50%" valign="top" align="right">
+        <p style="margin: 0;">Amount</p>
+      </td>
+    </tr>
+    <tr>
+      <td width="50%" valign="top">
+        <br/>
+        <p style="margin: 0;">${planName}</p>
+      </td>
+      <td width="50%" valign="top" align="right">
+        <br/>
+        <p style="margin: 0;">${currencySymbol} ${amount}</p>
+      </td>
+    </tr>
+  </table>
+  
+  <br/>
+  <p style="margin: 0;">Basic Price</p>
+  <p style="margin: 0;">${currencySymbol} ${basePriceVal}</p>
+  <p style="margin: 0;">Discount</p>
+  <p style="margin: 0;">${currencySymbol} ${discountVal}</p>
+  <p style="margin: 0;">Tax</p>
+  <p style="margin: 0;">${currencySymbol} ${taxVal}</p>
+  <p style="margin: 0;"><strong>Total: ${currencySymbol} ${amount}</strong></p>
 </div>
 `;
+};
+
 
 // OTHER TEMPLATES
 
@@ -627,3 +702,6 @@ export const partnerApplicationRejectedTemplate = ({ name }: any) => `
   <p>Best regards,<br/><strong>Team HealthMitra</strong></p>
 </div>
 `;
+
+
+

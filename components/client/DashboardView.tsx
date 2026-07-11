@@ -6,7 +6,8 @@ import { QuickActions } from "@/components/client/QuickActions";
 import { ActivityFeed } from "@/components/client/ActivityFeed";
 import { NotificationsPanel } from "@/components/client/NotificationsPanel";
 import { DashboardData } from "@/types/dashboard";
-import { AlertTriangle, ArrowRight, CreditCard } from "lucide-react";
+import { AlertTriangle, ArrowRight, CreditCard, ChevronDown } from "lucide-react";
+import React, { useState, useEffect } from "react";
 
 // Empty-state fallback when API returns no data
 const DEFAULT_EMPTY_DATA: DashboardData = {
@@ -70,6 +71,14 @@ export function DashboardView({ initialData }: DashboardViewProps) {
     const data = initialData || DEFAULT_EMPTY_DATA;
     const loading = false;
     
+    const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (data.activePlans && data.activePlans.length > 0 && !selectedPlanId) {
+            setSelectedPlanId(data.activePlans[0].id);
+        }
+    }, [data.activePlans, selectedPlanId]);
+
     const markNotificationAsRead = async (id: string) => {
         try {
             const { createClient } = await import('@/lib/supabase/client');
@@ -172,10 +181,37 @@ export function DashboardView({ initialData }: DashboardViewProps) {
                 );
             })()}
 
+            {/* Plan Selector */}
+            {data.activePlans && data.activePlans.length > 0 && (
+                <div className="animate-fade-in-up flex flex-col sm:flex-row sm:items-center justify-between bg-white p-5 rounded-2xl shadow-sm border border-slate-200 gap-4" style={{ animationDelay: '80ms' }}>
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center shrink-0">
+                            <CreditCard className="w-6 h-6 text-teal-600" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-bold text-slate-800">Viewing Stats For</h3>
+                            <p className="text-sm text-slate-500">Select a plan to filter your dashboard</p>
+                        </div>
+                    </div>
+                    <div className="relative w-full sm:w-64">
+                        <select 
+                            value={selectedPlanId || ''} 
+                            onChange={(e) => setSelectedPlanId(e.target.value)}
+                            className="appearance-none w-full bg-slate-50 border border-slate-200 text-slate-700 font-semibold py-2.5 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent cursor-pointer"
+                        >
+                            {data.activePlans.map(plan => (
+                                <option key={plan.id} value={plan.id}>{plan.name}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none" />
+                    </div>
+                </div>
+            )}
+
             {/* 2. Quick Stats - Now with 8 cards */}
             <div className="animate-fade-in-up" style={{ animationDelay: '100ms' }}>
                 <QuickStats
-                    plans={data.activePlans}
+                    plans={data.activePlans.filter(p => !selectedPlanId || p.id === selectedPlanId)}
                     eCard={data.eCardStatus}
                     wallet={data.wallet}
                     pending={data.pendingRequests}
@@ -184,6 +220,7 @@ export function DashboardView({ initialData }: DashboardViewProps) {
                     members={data.members}
                     reimbursement={data.reimbursementSummary}
                     loading={loading}
+                    selectedPlanId={selectedPlanId}
                 />
             </div>
 

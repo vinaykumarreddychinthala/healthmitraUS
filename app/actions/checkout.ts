@@ -108,10 +108,11 @@ export async function purchasePlan(data: PlanPurchaseData) {
         transactionId = `TEST_${Date.now()}`;
     }
 
-    // Calculate expiry date (1 year from now)
+    // Calculate expiry date (exactly plan duration, default 365 days)
     const startDate = new Date();
     const expiryDate = new Date();
-    expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+    const planDurationDays = plan.duration_days || 365;
+    expiryDate.setDate(expiryDate.getDate() + Math.max(0, planDurationDays - 1));
 
     // Ensure profile exists — use admin client to bypass RLS
     try {
@@ -169,13 +170,20 @@ export async function purchasePlan(data: PlanPurchaseData) {
     // Create invoice record for the purchase (non-critical, don't fail if this fails)
     try {
         const invoiceNumber = `INV-${new Date().getFullYear()}-${member.id?.slice(-8).toUpperCase() || Date.now().toString(36).toUpperCase()}`;
-        const gstAmount = 0;
+        
+        let baseAmount = plan.price;
+        let gstAmount = 0;
+        if (data.paymentMethod === 'razorpay') {
+            baseAmount = Number((plan.price / 1.18).toFixed(2));
+            gstAmount = Number((plan.price - baseAmount).toFixed(2));
+        }
+
         await adminClient.from('invoices').insert({
             user_id: user.id,
             plan_id: data.planId,
             plan_name: plan.name,
             invoice_number: invoiceNumber,
-            amount: plan.price,
+            amount: baseAmount,
             gst: gstAmount,
             total: plan.price,
             status: 'paid',

@@ -52,17 +52,6 @@ export async function getECards() {
             return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         };
 
-        const fmtDateMinusOne = (d: string | null | undefined) => {
-            if (!d) return 'N/A';
-            const parts = d.split('T')[0].split('-');
-            if (parts.length === 3) {
-                const dt = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
-                dt.setUTCDate(dt.getUTCDate() - 1);
-                return dt.toLocaleDateString('en-IN', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
-            }
-            return fmtDate(d);
-        };
-
         return {
             id: m.id,
             user_id: m.user_id,
@@ -75,7 +64,7 @@ export async function getECards() {
             gender: m.gender,
             blood_group: m.blood_group || '',
             valid_from: fmtDate(m.valid_from),
-            valid_till: fmtDateMinusOne(m.valid_till),
+            valid_till: fmtDate(m.valid_till),
             status: m.status,
             plan_name: m.plans?.name || 'Health Plan',
             plan_price: m.plans?.price || 0,
@@ -171,14 +160,19 @@ export async function getMyPurchases() {
         };
     });
 
-    // Group by card_unique_id to combine family members under same purchase
+    // Group by plan_id and valid_from to combine family members under same purchase
     const groupedMap = new Map<string, any>();
 
     for (const p of purchases) {
-        const key = p.card_number || p.id;
+        const key = `${p.plan_id}_${p.start_date}`;
         if (!groupedMap.has(key)) {
             groupedMap.set(key, { ...p, family_members: [] });
+        } else if (p.relation === 'Self') {
+            // Ensure Self information overrides pending member data if encountered later
+            const existing = groupedMap.get(key);
+            groupedMap.set(key, { ...existing, ...p, family_members: existing.family_members });
         }
+        
         if (p.relation !== 'Self') {
             const existing = groupedMap.get(key);
             existing.family_members = existing.family_members || [];
@@ -194,7 +188,9 @@ export async function getMyPurchases() {
 
     // Add members_count to each purchase
     for (const p of groupedPurchases) {
-        p.members_count = data.filter((d: any) => (d.card_unique_id || d.id) === (p.card_number || p.id)).length;
+        p.members_count = data.filter((d: any) => 
+            (d.plans?.id || d.plan_id) === p.plan_id && d.valid_from === p.start_date
+        ).length;
     }
 
     // Sort by creation date, newest first

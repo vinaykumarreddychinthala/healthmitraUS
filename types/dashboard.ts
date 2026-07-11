@@ -14,6 +14,7 @@ export interface User {
 
 export interface ActivePlan {
     id: string;
+    planId: string;
     name: string;
     status: PlanStatus;
     validUntil: string;
@@ -49,7 +50,7 @@ export interface ServiceData {
 export interface MembersData {
     totalMembers: number;
     withActiveCards: number;
-    familyMembers: { name: string; relation: string }[];
+    familyMembers: { name: string; relation: string; planId?: string; status?: string }[];
 }
 
 export interface ReimbursementData {
@@ -65,6 +66,7 @@ export interface PendingRequests {
         serviceRequests: number;
         reimbursements: number;
     };
+    byPlan?: Record<string, { total: number; serviceRequests: number; reimbursements: number }>;
 }
 
 export interface RecentActivity {

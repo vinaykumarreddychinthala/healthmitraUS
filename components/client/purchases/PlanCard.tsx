@@ -69,7 +69,7 @@ export function PlanCard({ plan }: PlanCardProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                     <div>
                         <p className="text-xs text-slate-500 mb-1">Coverage Amount</p>
-                        <p className="font-semibold text-slate-800">$ {plan.coverageAmount.toLocaleString('en-IN')}</p>
+                        <p className="font-semibold text-slate-800 text-sm">No-limit as per plan</p>
                     </div>
                     <div>
                         <p className="text-xs text-slate-500 mb-1">Members Covered</p>

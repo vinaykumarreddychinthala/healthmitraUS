@@ -20,12 +20,16 @@ CREATE TABLE IF NOT EXISTS policy_holder_kyc (
     aadhaar_declaration  BOOLEAN NOT NULL DEFAULT false,  -- true = no aadhaar, self-declared
     aadhaar_file_url     TEXT,
     aadhaar_file_path    TEXT,
+    aadhaar_signature_url TEXT,                     -- Digital signature for Aadhaar declaration
+    aadhaar_signature_path TEXT,
 
     -- PAN (either number OR declaration)
     pan_number           TEXT,                      -- 10-char, NULL if declaration used
     pan_declaration      BOOLEAN NOT NULL DEFAULT false,  -- true = no pan, self-declared
     pan_file_url         TEXT,
     pan_file_path        TEXT,
+    pan_signature_url    TEXT,                      -- Digital signature for PAN declaration
+    pan_signature_path   TEXT,
 
     -- Photo
     photo_url            TEXT NOT NULL,             -- Supabase Storage public URL

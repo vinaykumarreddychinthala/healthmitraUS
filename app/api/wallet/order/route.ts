@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import Razorpay from 'razorpay';
+import Stripe from 'stripe';
 
 export async function POST(request: Request) {
     try {
@@ -13,46 +13,49 @@ export async function POST(request: Request) {
 
         const { amount } = await request.json();
 
-        // Get Razorpay settings
-        const adminClient = await createAdminClient();
-        const { data: settings } = await adminClient.from('system_settings')
-            .select('key, value')
-            .in('key', ['razorpay_enabled', 'razorpay_key_id', 'razorpay_key_secret']);
-
-        const enabled = settings?.find(s => s.key === 'razorpay_enabled')?.value === 'true';
-        const keyId = settings?.find(s => s.key === 'razorpay_key_id')?.value;
-        const keySecret = settings?.find(s => s.key === 'razorpay_key_secret')?.value;
-
-        if (!enabled || !keyId || !keySecret) {
-            return NextResponse.json({ success: false, error: 'Razorpay not configured' }, { status: 400 });
+        if (!amount || Number(amount) < 1) {
+            return NextResponse.json({ success: false, error: 'Minimum amount is $1' }, { status: 400 });
         }
 
-        const razorpay = new Razorpay({
-            key_id: keyId,
-            key_secret: keySecret,
+        const secretKey = process.env.STRIPE_SECRET_KEY;
+        if (!secretKey) {
+            return NextResponse.json({ success: false, error: 'Stripe not configured' }, { status: 400 });
+        }
+
+        const stripe = new Stripe(secretKey, {
+            apiVersion: '2026-04-22.dahlia' as any,
         });
 
-        const order = await razorpay.orders.create({
-            amount: Math.round(amount * 100),
-            currency: 'USD',
-            receipt: `wallet_${Date.now()}`,
-            notes: {
+        // Get user profile for email
+        const adminClient = await createAdminClient();
+        const { data: profile } = await adminClient
+            .from('profiles')
+            .select('email, full_name')
+            .eq('id', user.id)
+            .single();
+
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: Math.round(Number(amount) * 100), // cents
+            currency: 'usd',
+            receipt_email: profile?.email || user.email || undefined,
+            metadata: {
                 userId: user.id,
                 type: 'wallet_topup',
+                amount: String(amount),
             },
+            payment_method_types: ['card'],
         });
 
         return NextResponse.json({
             success: true,
-            data: {
-                orderId: order.id,
-                amount: order.amount,
-                currency: order.currency,
-                keyId,
-            }
+            clientSecret: paymentIntent.client_secret,
+            paymentIntentId: paymentIntent.id,
         });
     } catch (error: any) {
-        console.error('Wallet order error:', error);
-        return NextResponse.json({ success: false, error: error.message || 'Failed to create order' }, { status: 500 });
+        console.error('Wallet Stripe order error:', error);
+        return NextResponse.json(
+            { success: false, error: error.message || 'Failed to create payment intent' },
+            { status: 500 }
+        );
     }
 }

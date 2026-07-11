@@ -70,6 +70,16 @@ export function Turnstile({
         }
     }, []);
 
+    const onVerifyRef = useRef(onVerify);
+    const onExpireRef = useRef(onExpire);
+    const onErrorRef = useRef(onError);
+
+    useEffect(() => {
+        onVerifyRef.current = onVerify;
+        onExpireRef.current = onExpire;
+        onErrorRef.current = onError;
+    }, [onVerify, onExpire, onError]);
+
     useEffect(() => {
         if (!scriptLoaded || !siteKey || !containerRef.current || widgetIdRef.current) return;
 
@@ -77,14 +87,17 @@ export function Turnstile({
             try {
                 const widgetId = window.turnstile.render(containerRef.current, {
                     sitekey: siteKey,
-                    callback: onVerify,
+                    callback: (token: string) => {
+                        if (onVerifyRef.current) onVerifyRef.current(token);
+                    },
                     'expired-callback': () => {
-                        if (onExpire) onExpire();
+                        if (onExpireRef.current) onExpireRef.current();
                     },
                     'error-callback': () => {
-                        if (onError) onError();
+                        if (onErrorRef.current) onErrorRef.current();
                     },
                     theme: 'light',
+                    appearance: 'always',
                 });
                 widgetIdRef.current = widgetId;
             } catch (err) {
@@ -102,7 +115,7 @@ export function Turnstile({
                 widgetIdRef.current = null;
             }
         };
-    }, [scriptLoaded, siteKey, onVerify, onExpire, onError]);
+    }, [scriptLoaded, siteKey]); // Only re-run if script loads or siteKey changes
 
     return (
         <div 
@@ -111,3 +124,4 @@ export function Turnstile({
         />
     );
 }
+

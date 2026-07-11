@@ -48,7 +48,7 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
                         <div className="relative z-10 flex justify-between items-start mb-8">
                             <div>
                                 <p className="text-teal-100 text-sm mb-1">Total Coverage</p>
-                                <h2 className="text-3xl font-bold">$ {planDetails.coverage_amount?.toLocaleString() || 0}</h2>
+                                <h2 className="text-2xl font-bold">No-limit as per plan</h2>
                             </div>
                             <ShieldCheck className="h-10 w-10 text-teal-200 opacity-50" />
                         </div>

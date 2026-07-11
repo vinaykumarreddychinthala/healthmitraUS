@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CreditCard, User, CheckCircle, Edit2 } from 'lucide-react';
 import PlanPolicySelector, { ServiceRequestContext } from '@/components/client/services/PlanPolicySelector';
 import { ServiceRequestForm } from '@/components/client/ServiceRequestForm';
 import Link from 'next/link';
+import { getUserProfile } from '@/app/actions/user';
 
 function NewServiceRequestContent() {
     const router = useRouter();
@@ -14,6 +15,19 @@ function NewServiceRequestContent() {
 
     // Wizard state: null = selector not done; filled = context chosen
     const [context, setContext] = useState<ServiceRequestContext | null>(null);
+    const [userProfile, setUserProfile] = useState<any>(null);
+    const [profileLoaded, setProfileLoaded] = useState(false);
+
+    useEffect(() => {
+        async function fetchProfile() {
+            const res = await getUserProfile();
+            if (res.success && res.data) {
+                setUserProfile(res.data);
+            }
+            setProfileLoaded(true);
+        }
+        fetchProfile();
+    }, []);
 
     const handleContextSelected = (ctx: ServiceRequestContext) => {
         setContext(ctx);
@@ -118,7 +132,7 @@ function NewServiceRequestContent() {
 
                             {/* The actual service request form */}
                             <ServiceRequestForm
-                                userProfile={{}}
+                                userProfile={userProfile}
                                 allowedServices={context.plan.allowedServices}
                                 initialType={typeFromUrl || undefined}
                                 serviceContext={context}

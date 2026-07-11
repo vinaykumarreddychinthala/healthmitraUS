@@ -12,6 +12,7 @@ import {
     billUploadTimelineTemplate,
     adminBillUploadedTemplate
 } from '@/lib/email-templates';
+import { addReimbursementToWallet } from '@/app/actions/wallet';
 
 export async function getClaims() {
     const supabase = await createAdminClient();
@@ -65,7 +66,7 @@ export async function processClaim(id: string, status: ClaimStatus, data: { amou
 
     if (error) return { success: false, error: error.message };
 
-    // Send notification email
+    // Send notification email and update wallet if approved
     try {
         const { data: claim } = await supabase
             .from('reimbursement_claims')
@@ -74,6 +75,11 @@ export async function processClaim(id: string, status: ClaimStatus, data: { amou
             .single();
             
         if (claim) {
+            // Update wallet if approved
+            if (status === 'approved' && data.amount !== undefined && data.amount > 0) {
+                await addReimbursementToWallet(claim.user_id, data.amount, id);
+            }
+            
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('email, full_name')
@@ -126,9 +132,11 @@ export async function processClaim(id: string, status: ClaimStatus, data: { amou
 }
 
 export async function submitClaim(claimData: any) {
-    const supabase = await createAdminClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const userClient = await createClient();
+    const { data: { user } } = await userClient.auth.getUser();
     if (!user) return { success: false, error: "Unauthorized" };
+
+    const supabase = await createAdminClient();
 
     const { data, error } = await supabase
         .from('reimbursement_claims')

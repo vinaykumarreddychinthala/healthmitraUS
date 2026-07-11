@@ -265,7 +265,7 @@ export default function ECardFlip({ card, kycStatus, onDownloadClick, onComplete
                                 <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl p-3 text-white mb-3">
                                     <p className="text-[9px] text-teal-100 uppercase tracking-wide mb-0.5">Active Plan</p>
                                     <p className="font-bold text-sm leading-tight">{card.planName}</p>
-                                    <p className="text-[9px] text-teal-100 mt-1">Coverage: <span className="font-bold text-white">No Limit</span></p>
+                                    <p className="text-[9px] text-teal-100 mt-1">Coverage: <span className="font-bold text-white">No-limit as per plan</span></p>
                                     <div className="mt-2 pt-2 border-t border-white/20 text-[9px] text-teal-100">
                                         <p>Valid: <span className="text-white font-semibold">{card.validFrom}</span></p>
                                         <p>Expires: <span className="text-white font-semibold">{card.validTill}</span></p>

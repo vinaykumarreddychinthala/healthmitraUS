@@ -7,7 +7,6 @@ import { walletTopUpSuccessTemplate } from '@/lib/email-templates';
 export async function ensureWalletExists(userId: string): Promise<{ success: boolean; wallet?: any; error?: string }> {
     const adminClient = await createAdminClient();
 
-    // Check if wallet exists
     const { data: existingWallet } = await adminClient
         .from('wallets')
         .select('*')
@@ -18,13 +17,14 @@ export async function ensureWalletExists(userId: string): Promise<{ success: boo
         return { success: true, wallet: existingWallet };
     }
 
-    // Create wallet if it doesn't exist - use admin client to bypass RLS
     const { data: newWallet, error } = await adminClient
         .from('wallets')
         .insert({
             user_id: userId,
             balance: 0,
-            currency: 'USD'
+            added_money: 0,
+            currency: 'USD',
+            status: 'active',
         })
         .select()
         .single();
@@ -39,23 +39,27 @@ export async function ensureWalletExists(userId: string): Promise<{ success: boo
 
 export async function addMoneyToWallet(
     userId: string,
-    amount: number
+    amount: number,
+    stripePaymentIntentId?: string
 ): Promise<{ success: boolean; error?: string }> {
     const adminClient = await createAdminClient();
 
-    // Ensure wallet exists
     const walletResult = await ensureWalletExists(userId);
     if (!walletResult.success) {
         return { success: false, error: walletResult.error };
     }
 
-    const newBalance = (walletResult.wallet?.balance || 0) + Number(amount);
+    const currentBalance = Number(walletResult.wallet?.balance || 0);
+    const currentAddedMoney = Number(walletResult.wallet?.added_money || 0);
+    const newBalance = currentBalance + Number(amount);
+    const newAddedMoney = currentAddedMoney + Number(amount);
 
     const { error } = await adminClient
         .from('wallets')
-        .update({ 
+        .update({
             balance: newBalance,
-            updated_at: new Date().toISOString()
+            added_money: newAddedMoney,
+            updated_at: new Date().toISOString(),
         })
         .eq('user_id', userId);
 
@@ -64,18 +68,22 @@ export async function addMoneyToWallet(
         return { success: false, error: error.message };
     }
 
-    // Record transaction - use user_id as per schema (NOT wallet_id)
+    // Record transaction
     const { error: txnError } = await adminClient.from('wallet_transactions').insert({
         user_id: userId,
         type: 'credit',
         amount: Number(amount),
-        description: 'Wallet top-up',
+        description: 'Wallet top-up via Stripe',
         status: 'success',
-        transaction_date: new Date().toISOString()
+        payment_method: 'stripe',
+        stripe_payment_intent_id: stripePaymentIntentId || null,
+        reference_id: stripePaymentIntentId || `TOPUP_${Date.now()}`,
+        transaction_date: new Date().toISOString(),
     });
 
     if (txnError) {
         console.error('Transaction record error:', txnError);
+        // Non-fatal — wallet was already credited
     }
 
     // Send confirmation email
@@ -93,13 +101,61 @@ export async function addMoneyToWallet(
                 html: walletTopUpSuccessTemplate({
                     customerName: profile.full_name || profile.email.split('@')[0],
                     amount: amount,
-                    transactionId: `WT-${Date.now()}`,
-                    newBalance: newBalance
-                })
+                    transactionId: stripePaymentIntentId || `WT-${Date.now()}`,
+                    newBalance: newBalance,
+                }),
             });
         }
     } catch (emailError) {
         console.error('Failed to send wallet top-up email:', emailError);
+    }
+
+    return { success: true };
+}
+
+export async function addReimbursementToWallet(
+    userId: string,
+    amount: number,
+    claimId: string
+): Promise<{ success: boolean; error?: string }> {
+    const adminClient = await createAdminClient();
+
+    const walletResult = await ensureWalletExists(userId);
+    if (!walletResult.success) {
+        return { success: false, error: walletResult.error };
+    }
+
+    const currentBalance = Number(walletResult.wallet?.balance || 0);
+    // Note: We ONLY add to balance, NOT added_money. 
+    // Withdrawable amount = balance - added_money, so this increases the withdrawable amount.
+    const newBalance = currentBalance + Number(amount);
+
+    const { error } = await adminClient
+        .from('wallets')
+        .update({
+            balance: newBalance,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId);
+
+    if (error) {
+        console.error('Wallet update error:', error);
+        return { success: false, error: error.message };
+    }
+
+    // Record transaction
+    const { error: txnError } = await adminClient.from('wallet_transactions').insert({
+        user_id: userId,
+        type: 'credit',
+        amount: Number(amount),
+        description: `Bill Reimbursement Approved (Claim #${claimId})`,
+        status: 'success',
+        reference_id: claimId,
+        transaction_date: new Date().toISOString(),
+    });
+
+    if (txnError) {
+        console.error('Transaction record error:', txnError);
     }
 
     return { success: true };
@@ -115,19 +171,71 @@ export async function getWalletWithTransactions(userId: string) {
         .single();
 
     if (error && error.code !== 'PGRST116') {
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, wallet: null, transactions: [] };
     }
 
     if (!wallet) {
         return { success: true, wallet: null, transactions: [] };
     }
 
-    // Use user_id instead of wallet_id for transactions
     const { data: transactions } = await adminClient
         .from('wallet_transactions')
         .select('*')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
     return { success: true, wallet, transactions: transactions || [] };
+}
+
+export async function deductFromWallet(
+    userId: string,
+    amount: number,
+    description: string,
+    referenceId?: string
+): Promise<{ success: boolean; error?: string }> {
+    const adminClient = await createAdminClient();
+
+    const walletResult = await ensureWalletExists(userId);
+    if (!walletResult.success) {
+        return { success: false, error: walletResult.error };
+    }
+
+    const currentBalance = Number(walletResult.wallet?.balance || 0);
+
+    if (currentBalance < amount) {
+        return { success: false, error: 'Insufficient wallet balance' };
+    }
+
+    const newBalance = currentBalance - Number(amount);
+
+    const { error } = await adminClient
+        .from('wallets')
+        .update({
+            balance: newBalance,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId);
+
+    if (error) {
+        console.error('Wallet deduction error:', error);
+        return { success: false, error: error.message };
+    }
+
+    // Record debit transaction
+    const { error: txnError } = await adminClient.from('wallet_transactions').insert({
+        user_id: userId,
+        type: 'debit',
+        amount: Number(amount),
+        description,
+        status: 'success',
+        reference_id: referenceId || `WD-${Date.now()}`,
+        transaction_date: new Date().toISOString(),
+    });
+
+    if (txnError) {
+        console.error('Debit transaction record error:', txnError);
+    }
+
+    return { success: true };
 }

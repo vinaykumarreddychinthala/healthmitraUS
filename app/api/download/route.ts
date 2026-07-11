@@ -48,161 +48,409 @@ function numberToWords(num: number): string {
     return inWords(num).trim();
 }
 
-function generatePlanReceiptAndInvoiceHTML(invoice: any, purchase: any, isInvoice: boolean) {
-    const invoiceDate = new Date(invoice.created_at || new Date()).toLocaleDateString('en-GB'); // DD/MM/YYYY
-    const title = isInvoice ? 'Invoice' : 'Payment Receipt';
-    const amount = Number(invoice.amount || 0);
-    const amountInWords = numberToWords(amount);
-
-    // Helper to format date as DD MMM YYYY safely using UTC
-    const fmtDateStr = (raw: string, minusOneDay = false) => {
+// ── Payment Receipt HTML (matches the tabular receipt format in image) ──────────
+function generatePaymentReceiptHTML(invoice: any, purchase: any) {
+    const fmtShortDate = (raw: string) => {
         if (!raw) return 'N/A';
-        const parts = raw.split('T')[0].split('-');
-        if (parts.length !== 3) return raw;
-        const d = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
-        if (minusOneDay) {
-            d.setUTCDate(d.getUTCDate() - 1);
-        }
-        return d.toLocaleDateString('en-IN', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
+        const d = new Date(raw);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = String(d.getFullYear()).slice(-2);
+        return `${day}/${month}/${year}`;
     };
 
-    let validity = '';
-    let term = '1';
-    if (purchase && purchase.valid_from && purchase.valid_till) {
-        validity = `${fmtDateStr(purchase.valid_from)} to ${fmtDateStr(purchase.valid_till, true)}`;
-        const diffTime = Math.abs(new Date(purchase.valid_till).getTime() - new Date(purchase.valid_from).getTime());
-        term = Math.round(diffTime / (1000 * 60 * 60 * 24 * 365)).toString();
-    } else {
-        const start = new Date(invoice.created_at || new Date());
-        const end = new Date(start);
-        end.setFullYear(end.getFullYear() + 1);
-        end.setDate(end.getDate() - 1);
-        validity = `${start.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} to ${end.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
-    }
+    const paymentDate = fmtShortDate(invoice.created_at || new Date().toISOString());
+    const amount = Number(invoice.amount || 0);
+    const currencyStr = invoice.currency || 'USD';
+    const currSymbol = currencyStr === 'INR' ? '₹' : '$';
 
     const patientName = purchase.holder_full_name || purchase.full_name || purchase.profileName || invoice.email || 'Customer';
-    const patientAddress = invoice.address || 'N/A';
+    const patientPhone = invoice.phone || purchase.phone || '';
+    const patientEmail = invoice.email || '';
+
+    // Price breakdown - USE DB VALUES DIRECTLY
+    let basePrice = Number(invoice.base_price || invoice.amount || 0);
+    let discount = Number(invoice.discount || 0);
+    let tax = Number(invoice.tax || invoice.gst || 0);
+    let total = Number(invoice.total || (basePrice - discount + tax));
+
+    const transactionId = invoice.transaction_id || purchase.card_unique_id || purchase.transaction_id || 'N/A';
+    const gstNo = invoice.gst_number || '07AAGCH7172M1Z3';
+    const planName = invoice.plan_name || purchase.plan?.name || 'Health Plan';
 
     return `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>${title} - ${invoice.invoice_number}</title>
+    <title>Payment Receipt - ${invoice.invoice_number}</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Times New Roman', Times, serif;
+            font-family: Arial, Helvetica, sans-serif;
             background: #fff;
-            color: #000;
-            line-height: 1.6;
-            padding: 40px;
-            max-width: 800px;
+            color: #222;
+            font-size: 13px;
+            padding: 30px;
+            max-width: 760px;
             margin: 0 auto;
         }
-        .text-center {
+        .outer-box {
+            border: 1px solid #bbb;
+            padding: 0;
+        }
+        .title-row {
             text-align: center;
-        }
-        .title {
-            font-size: 24px;
+            border-bottom: 1px solid #bbb;
+            padding: 14px 0;
+            font-size: 16px;
             font-weight: bold;
-            text-decoration: underline;
-            margin-bottom: 40px;
+            letter-spacing: 0.3px;
         }
-        .flex-between {
+        .section {
+            padding: 14px 20px;
+        }
+        .border-bottom { border-bottom: 1px solid #bbb; }
+        .row-2col {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 40px;
+            margin-bottom: 4px;
         }
-        .patient-info {
-            margin-bottom: 40px;
+        .col { flex: 1; }
+        .col-right { flex: 1; text-align: left; padding-left: 40px; }
+        .label { font-weight: bold; margin-bottom: 2px; }
+        .val-blue { color: #1a5ca8; }
+        .small { font-size: 12px; color: #333; margin-top: 2px; }
+        .desc-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 20px;
         }
-        .patient-info p {
-            margin-bottom: 5px;
+        .summary-wrap {
+            padding: 12px 20px 16px;
+            display: flex;
+            justify-content: flex-end;
         }
-        .certification {
-            margin-bottom: 40px;
-            text-align: justify;
+        .summary-table {
+            width: 260px;
+            font-size: 13px;
         }
-        .plan-details {
-            display: grid;
-            grid-template-columns: 200px 10px auto;
-            gap: 10px 0;
-            margin-bottom: 50px;
-        }
-        .tax-paragraph {
-            text-align: justify;
-            margin-bottom: 50px;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 50px;
-        }
+        .summary-table tr td:first-child { color: #555; padding-right: 10px; }
+        .summary-table tr td:last-child { text-align: right; }
+        .bold-label { font-weight: bold; font-size: 13px; }
     </style>
 </head>
 <body>
-    <table style="width: 100%; margin-bottom: 40px;">
+<div class="outer-box">
+    <!-- Title -->
+    <div class="title-row">Payment Receipt</div>
+
+    <!-- Details Section -->
+    <div class="section border-bottom">
+        <div class="row-2col">
+            <div class="col">
+                <div class="bold-label">Payment No</div>
+                <div class="val-blue">${invoice.invoice_number || 'N/A'}</div>
+            </div>
+            <div class="col-right">
+                <div class="bold-label">Payment Date</div>
+                <div>${paymentDate}</div>
+            </div>
+        </div>
+        
+        <div class="row-2col" style="margin-top:20px;">
+            <div class="col">
+                <div class="bold-label">Client</div>
+                <div>${patientName}</div>
+                ${patientPhone ? `<div class="small">(+91) ${patientPhone}</div>` : ''}
+                ${patientEmail ? `<div class="small">${patientEmail}</div>` : ''}
+            </div>
+            <div class="col-right">
+                <div class="bold-label">Payment To</div>
+                <div>HealthMitra</div>
+                <div class="small">(+91) 9818823106</div>
+                <div class="small">service@healthmitraus.com</div>
+            </div>
+        </div>
+
+        <div class="row-2col" style="margin-top:20px;">
+            <div class="col">
+                <div class="bold-label">HealthMitra Transaction Id</div>
+                <div>${transactionId}</div>
+            </div>
+            <div class="col-right">
+                <div class="bold-label">HealthMitra GST No</div>
+                <div>${gstNo}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Description / Amount header -->
+    <div class="section border-bottom" style="padding-bottom:8px; padding-top:8px;">
+        <div class="row-2col" style="margin-bottom:0;">
+            <div class="col bold-label">Description</div>
+            <div class="col-right bold-label" style="text-align:right;">Amount</div>
+        </div>
+    </div>
+
+    <!-- Line item -->
+    <div class="desc-row border-bottom">
+        <div>${planName}</div>
+        <div class="val-blue">${currSymbol}${basePrice.toFixed(2)}</div>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-wrap">
+        <table class="summary-table">
+            <tr><td>Basic Price :</td><td>${currSymbol}${basePrice.toFixed(2)}</td></tr>
+            <tr><td>Discount :</td><td>${currSymbol}${discount.toFixed(2)}</td></tr>
+            <tr><td>Tax :</td><td>${currSymbol}${tax.toFixed(2)}</td></tr>
+            <tr><td><strong>Total :</strong></td><td><strong>${currSymbol}${total.toLocaleString('en-IN')}</strong></td></tr>
+        </table>
+    </div>
+</div>
+</body>
+</html>`;
+}
+
+// ── Tax Receipt (Invoice) HTML (matches the formal letterhead format in image) ─
+function generateTaxReceiptHTML(invoice: any, purchase: any) {
+    const fmtShortDate = (raw: string) => {
+        if (!raw) return 'N/A';
+        const d = new Date(raw);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = String(d.getFullYear()).slice(-2);
+        return `${day}/${month}/${year}`;
+    };
+
+    const fmtValidityDate = (raw: string) => {
+        if (!raw) return 'N/A';
+        const parts = raw.split('T')[0].split('-');
+        if (parts.length !== 3) return raw;
+        const d = new Date(Date.UTC(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const year = String(d.getUTCFullYear()).slice(-2);
+        return `${day}/${month}/${year}`;
+    };
+
+    const paymentDate = fmtShortDate(invoice.created_at || new Date().toISOString());
+    const baseAmount = Number(invoice.base_price || invoice.amount || 0);
+    const taxAmount = Number(invoice.tax || invoice.gst || 0);
+    const totalAmount = Number(invoice.total || (baseAmount + taxAmount));
+    
+    const currencyStr = invoice.currency || 'USD';
+    const currSymbol = currencyStr === 'INR' ? '₹' : '$';
+    
+    const amountInWords = numberToWords(Math.round(totalAmount));
+
+    const patientName = purchase.holder_full_name || purchase.full_name || purchase.profileName || invoice.email || 'Customer';
+    const planName = invoice.plan_name || purchase.plan?.name || 'Health Plan';
+    const transactionId = invoice.transaction_id || purchase.card_unique_id || purchase.transaction_id || 'N/A';
+    const gstNo = invoice.gst_number || '07AAGCH7172M1Z3';
+    const paymentNo = invoice.invoice_number || 'N/A';
+
+    // Validity dates
+    let validFrom = '';
+    let validTill = '';
+    let term = '12 Months.';
+    if (purchase.valid_from && purchase.valid_till) {
+        validFrom = fmtValidityDate(purchase.valid_from);
+        validTill = fmtValidityDate(purchase.valid_till);
+        const diffTime = Math.abs(new Date(purchase.valid_till).getTime() - new Date(purchase.valid_from).getTime());
+        const months = Math.round(diffTime / (1000 * 60 * 60 * 24 * 30));
+        term = `${months} Months.`;
+    } else {
+        const start = new Date(invoice.created_at || new Date());
+        const end = new Date(start);
+        const planDays = purchase?.plan?.duration_days || 365;
+        end.setDate(end.getDate() + Math.max(0, planDays - 1));
+        validFrom = fmtShortDate(start.toISOString());
+        validTill = fmtShortDate(end.toISOString());
+    }
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice - ${paymentNo}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #fff;
+            color: #222;
+            font-size: 13px;
+            padding: 40px 50px;
+            max-width: 800px;
+            margin: 0 auto;
+            min-height: 1100px;
+            position: relative;
+        }
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .logo-block { display: flex; align-items: center; gap: 10px; }
+        .logo-img { height: 60px; }
+        .logo-text { line-height: 1.2; }
+        .logo-name { font-size: 28px; font-weight: bold; color: #1a8bbf; }
+        .logo-sub { font-size: 10px; font-weight: bold; color: #555; letter-spacing: 1px; }
+        .title-block { text-align: center; flex: 1; }
+        .receipt-title {
+            font-size: 18px;
+            font-weight: bold;
+            text-decoration: underline;
+            letter-spacing: 0.5px;
+        }
+        /* Date + PayNo row */
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0 24px;
+            font-size: 13px;
+        }
+        .meta-right { text-align: right; line-height: 1.8; }
+        /* To section */
+        .to-section { margin-bottom: 18px; }
+        .to-section .to-label { font-size: 13px; margin-bottom: 4px; }
+        .to-section .customer-name { font-size: 13px; color: #1a5ca8; margin-bottom: 10px; }
+        /* Certification text */
+        .cert-text {
+            font-size: 12px;
+            color: #c0390a;
+            margin: 16px 0 24px;
+            line-height: 1.7;
+        }
+        /* Plan details table */
+        .plan-table { width: 100%; border-collapse: collapse; margin: 12px 0 24px; }
+        .plan-table tr td {
+            padding: 5px 0;
+            font-size: 13px;
+            vertical-align: top;
+        }
+        .plan-table tr td:first-child { font-weight: bold; width: 160px; }
+        .plan-table tr td:nth-child(2) { width: 20px; }
+        /* Notice */
+        .notice-text {
+            font-size: 11px;
+            color: #333;
+            line-height: 1.8;
+            margin: 18px 0 30px;
+        }
+        /* Computer generated line */
+        .generated-line {
+            text-align: center;
+            font-size: 12px;
+            font-style: italic;
+            text-decoration: underline;
+            color: #444;
+            margin: 30px 0 40px;
+        }
+        /* Footer */
+        .footer {
+            border-top: 1px solid #ccc;
+            padding-top: 14px;
+            text-align: center;
+            font-size: 11px;
+            color: #555;
+            line-height: 1.9;
+            margin-top: auto;
+        }
+        .footer a { color: #1a5ca8; }
+        hr.divider { border: none; border-top: 1px solid #ccc; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="logo-block">
+            <div class="logo-text">
+                <div class="logo-name">HealthMitra</div>
+                <div class="logo-sub">ON DEMAND HEALTHCARE</div>
+            </div>
+        </div>
+        <div class="title-block">
+            <span class="receipt-title">Invoice</span>
+        </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Date + Payment No -->
+    <div class="meta-row">
+        <div><strong>Date : ${paymentDate}</strong></div>
+        <div class="meta-right">
+            Payment No : <strong style="color:#1a5ca8;">${paymentNo}</strong><br>
+            GST No &nbsp;: <strong>${gstNo}</strong>
+        </div>
+    </div>
+
+    <!-- To section -->
+    <div class="to-section">
+        <div class="to-label">To,</div>
+        <div class="customer-name">${patientName} ,</div>
+    </div>
+
+    <!-- Certification text -->
+    <div class="cert-text">
+        This is to certify that we have received the sum of Rupees ${totalAmount}/- ( ${amountInWords} Rupees only) For Preventive Health Membership plan and
+        your HEALTH MITRA ID IS. Receipt No: <strong>${paymentNo}</strong> .
+    </div>
+
+    <!-- Plan details -->
+    <table class="plan-table">
         <tr>
-            <td style="width: 33%; text-align: left; vertical-align: top;">
-                <img src="https://healthmitraus.com/logo.jpg" alt="HealthMitra Logo" style="max-height: 80px;" onerror="this.style.display='none'; this.parentNode.innerHTML='<div style=\'font-size: 28px; font-weight: bold; color: #0d9488;\'>HealthMitra</div><div style=\'font-size: 14px; opacity: 0.8;\'>Healthcare Pvt. Ltd.</div>'" />
-            </td>
-            <td style="width: 33%; text-align: center; vertical-align: middle;">
-                <div class="title" style="margin-bottom: 0;">${title}</div>
-            </td>
-            <td style="width: 33%;"></td>
+            <td>PLAN NAME</td>
+            <td>:</td>
+            <td>${planName}</td>
+        </tr>
+        <tr>
+            <td>PLAN AMOUNT</td>
+            <td>:</td>
+            <td>${currSymbol}${totalAmount}/-</td>
+        </tr>
+        <tr>
+            <td>VALIDITY</td>
+            <td>:</td>
+            <td>${validTill}</td>
+        </tr>
+        <tr>
+            <td>TERM</td>
+            <td>:</td>
+            <td>${term}</td>
+        </tr>
+        <tr>
+            <td>TRANSACTION ID</td>
+            <td>:</td>
+            <td>${transactionId}</td>
         </tr>
     </table>
-    
-    <div class="flex-between">
-        <div>Date: ${invoiceDate}</div>
-        <div>Receipt No: <strong>${invoice.invoice_number}</strong></div>
+
+    <!-- Tax benefit notice -->
+    <div class="notice-text">
+        Health Mitra Preventive Health Care Membership Plan Member can claim deduction to the extent of rupees 5000/- or
+        the plan amount paid (whichever is lower) for their preventive health checkup service under the section 80D of the
+        income tax Act,1961 by the finance Act,2012. Tax Benefits are subject to changes in the tax laws Please consult your
+        tax advisor for more details. The benefit of section 80D is over and above the limit of Rupees 1,50,000/- prescribed
+        under section 80C/80CCC.
     </div>
-    
-    <div class="patient-info">
-        <p>To,</p>
-        <p><strong>${patientName}</strong></p>
-        <p>${patientAddress}</p>
+
+    <!-- Computer generated line -->
+    <div class="generated-line">
+        The above receipt is computer generated and does not require any stamp or signatures.
     </div>
-    
-    <div class="certification">
-        This is to certify that we have received the sum of $${amount.toFixed(2)} (Dollars ${amountInWords} only) For Preventive Health Membership plan and your HEALTHMITRA HEALTH ID IS. Receipt No: <strong>${invoice.invoice_number}</strong>.
-    </div>
-    
-    <div class="plan-details">
-        <div>PLAN NAME</div><div>:</div><div>${invoice.plan_name || 'HEALTH PLAN'}</div>
-        <div>PLAN AMOUNT</div><div>:</div><div>$${amount}</div>
-        <div>VALIDITY</div><div>:</div><div>${validity}</div>
-        <div>TERM</div><div>:</div><div>${term.padStart(2, '0')} YEARS.</div>
-    </div>
-    
-    ${!isInvoice ? `
-    <div class="tax-paragraph">
-        HealthMitra Preventive Health Care Membership Plan Member can claim deduction to the extent of $5000 or the plan amount paid (whichever is lower) for their preventive health checkup service under the section 80D of the income tax Act,1961 by the finance Act,2012. Tax Benefits are subject to changes in the tax laws Please consult your tax advisor for more details. The benefit of section 80D is over and above the limit of $150,000 prescribed under section 80C/80CCC.
-    </div>
-    ` : ''}
-    
+
+    <!-- Footer -->
     <div class="footer">
-        <p style="margin-bottom: 20px;">The above receipt is computer generated and does not require any stamp or signatures.</p>
-        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;" />
-        <div style="display: flex; justify-content: space-between; gap: 20px; font-size: 14px; line-height: 1.6; text-align: left; margin-bottom: 20px;">
-            <div style="flex: 1; padding: 15px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <p style="margin-bottom: 5px; color: #0d9488;"><strong>🇺🇸 US Office</strong></p>
-                <p>1550 Sheridan Drive,<br>Buffalo, NY 14217, United States</p>
-                <p style="margin-top: 8px;"><strong>Contact:</strong> +1 716-579-0346</p>
-            </div>
-            <div style="flex: 1; padding: 15px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <p style="margin-bottom: 5px; color: #0d9488;"><strong>🇮🇳 India Office</strong></p>
-                <p>HealthMitra Systems Pvt Ltd,<br>C-20/1, Sector 62, Noida, UP 201309, India</p>
-                <p style="margin-top: 8px;"><strong>Contact:</strong> +91 9818823106</p>
-            </div>
-        </div>
-        <div style="text-align: center; font-size: 14px;">
-            <p><strong>Email:</strong> service@healthmitraus.com | <strong>Website:</strong> www.healthmitraus.com</p>
-        </div>
+        Address: No. 42, DDA Complex, H Block, Vikaspuri, PIN 110018, Delhi.<br>
+        Email Id : service@healthmitraus.com &nbsp; Website: <a href="https://www.healthmitraus.com">www.healthmitraus.com</a> &nbsp; Contact : (+91) 9818823106 .
     </div>
+
 </body>
 </html>`;
 }
@@ -240,7 +488,7 @@ async function generateInvoice(supabase: any, adminClient: any, userId: string, 
 
         // Build invoice from invoice table
         const invoice = invoiceData;
-        const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { full_name: customerName, coverage_amount: 0, card_unique_id: 'N/A' }, true);
+        const htmlContent = generateTaxReceiptHTML(invoice, { full_name: customerName, coverage_amount: 0, card_unique_id: 'N/A' });
         return NextResponse.json({
             success: true,
             data: {
@@ -255,17 +503,30 @@ async function generateInvoice(supabase: any, adminClient: any, userId: string, 
     const { data: userProfile } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
 
     // Build invoice from purchase data
+    const finalAmount = purchaseData.plan?.price || 0;
+    const currencyStr = purchaseData.plan?.currency || 'USD';
+    let baseAmount = finalAmount;
+    let gstAmount = 0;
+    
+    if (currencyStr === 'INR') {
+        baseAmount = Number((finalAmount / 1.18).toFixed(2));
+        gstAmount = Number((finalAmount - baseAmount).toFixed(2));
+    }
+
     const invoice = {
         id: purchaseData.id,
         invoice_number: `INV-${purchaseData.id.slice(0, 8).toUpperCase()}`,
         plan_name: purchaseData.plan?.name || 'Health Plan',
-        amount: purchaseData.plan?.price || 0,
+        amount: baseAmount,
+        gst: gstAmount,
+        total: finalAmount,
+        currency: currencyStr,
         status: purchaseData.status === 'active' ? 'PAID' : 'PENDING',
         transaction_id: purchaseData.card_unique_id,
         created_at: purchaseData.created_at,
     };
 
-    const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { ...purchaseData, profileName: userProfile?.full_name }, true);
+    const htmlContent = generateTaxReceiptHTML(invoice, { ...purchaseData, profileName: userProfile?.full_name });
     const filename = `${invoice.invoice_number || 'Invoice'}.html`;
 
     return NextResponse.json({
@@ -311,7 +572,7 @@ async function generateReceipt(supabase: any, adminClient: any, userId: string, 
 
         // Build receipt from invoice table
         const invoice = invoiceData;
-        const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { full_name: customerName, coverage_amount: 0, card_unique_id: 'N/A' }, false);
+        const htmlContent = generatePaymentReceiptHTML(invoice, { full_name: customerName, coverage_amount: 0, card_unique_id: 'N/A' });
         return NextResponse.json({
             success: true,
             data: {
@@ -326,17 +587,30 @@ async function generateReceipt(supabase: any, adminClient: any, userId: string, 
     const { data: userProfile2 } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
 
     // Build receipt from purchase data
+    const finalAmount = purchaseData.plan?.price || 0;
+    const currencyStr = purchaseData.plan?.currency || 'USD';
+    let baseAmount = finalAmount;
+    let gstAmount = 0;
+    
+    if (currencyStr === 'INR') {
+        baseAmount = Number((finalAmount / 1.18).toFixed(2));
+        gstAmount = Number((finalAmount - baseAmount).toFixed(2));
+    }
+
     const invoice = {
         id: purchaseData.id,
         invoice_number: `INV-${purchaseData.id.slice(0, 8).toUpperCase()}`,
         plan_name: purchaseData.plan?.name || 'Health Plan',
-        amount: purchaseData.plan?.price || 0,
+        amount: baseAmount,
+        gst: gstAmount,
+        total: finalAmount,
+        currency: currencyStr,
         status: purchaseData.status === 'active' ? 'PAID' : 'PENDING',
         transaction_id: purchaseData.card_unique_id,
         created_at: purchaseData.created_at,
     };
 
-    const htmlContent = generatePlanReceiptAndInvoiceHTML(invoice, { ...purchaseData, profileName: userProfile2?.full_name }, false);
+    const htmlContent = generatePaymentReceiptHTML(invoice, { ...purchaseData, profileName: userProfile2?.full_name });
     const filename = `Receipt-${invoice.invoice_number || 'Payment'}.html`;
 
     return NextResponse.json({
@@ -435,11 +709,11 @@ Card No: ${member.card_unique_id || 'N/A'}
 Name: ${member.full_name}
 Relation: ${member.relation || 'Self'}
 Valid From: ${fmtDateStr(member.valid_from)}
-Valid Till: ${fmtDateStr(member.valid_till, true)}
+Valid Till: ${fmtDateStr(member.valid_till)}
 
 ------------------------------------------
 Plan: ${member.plan?.name || 'N/A'}
-Coverage: $${member.coverage_amount || 0}
+Coverage: No-limit as per plan
 
 ==========================================
 HealthMitra - Your Health Partner

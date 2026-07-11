@@ -386,7 +386,7 @@ function drawBackCard(ctx: CanvasRenderingContext2D, card: CardData) {
     ctx.fillText('Coverage: ', rx + 14, ry + 56);
     ctx.fillStyle = WHITE;
     ctx.font = 'bold 12px Inter, system-ui, sans-serif';
-    ctx.fillText('No Limit', rx + 66, ry + 56);
+    ctx.fillText('No-limit as per plan', rx + 66, ry + 56);
 
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = '9px Inter, system-ui, sans-serif';

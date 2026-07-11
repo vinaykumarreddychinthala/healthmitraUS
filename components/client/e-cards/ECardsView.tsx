@@ -5,10 +5,11 @@ import ECardFlip from '@/components/client/e-cards/ECardFlip';
 import PolicyHolderKYCModal from '@/components/client/e-cards/PolicyHolderKYCModal';
 import KYCEditRequestModal from '@/components/client/e-cards/KYCEditRequestModal';
 import KYCDetailsReadOnly from '@/components/client/e-cards/KYCDetailsReadOnly';
+import EmailECardModal from '@/components/client/e-cards/EmailECardModal';
 import { ECardMember } from '@/types/ecard';
 import {
-    CreditCard, Clock, ShieldCheck, ShieldAlert, Plus,
-    ChevronRight, CheckCircle2, AlertCircle, Lock, UserPlus, Tag
+    CreditCard, Clock, ShieldCheck, ShieldAlert,
+    ChevronRight, CheckCircle2, AlertCircle, UserPlus, Tag, Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
@@ -67,6 +68,8 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
             kycSubmitted: c.kycSubmitted || false,
             adminVerified: c.adminVerified || false,
             photoUrl: c.photo_url || undefined,
+            email: c.email || undefined,
+            mobile: c.mobile || undefined,
         };
     }));
 
@@ -86,6 +89,11 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
     // KYC details read-only view
     const [kycViewModal, setKycViewModal] = useState<{ open: boolean; memberId: string; memberName: string }>({
         open: false, memberId: '', memberName: ''
+    });
+
+    // Email e-card modal
+    const [emailModal, setEmailModal] = useState<{ open: boolean; card: ECardMember | null }>({
+        open: false, card: null
     });
 
     // Refresh KYC data on mount
@@ -303,6 +311,12 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <button
+                                                            onClick={() => setEmailModal({ open: true, card })}
+                                                            className="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors border border-blue-200 flex items-center gap-1"
+                                                        >
+                                                            <Mail className="w-3 h-3" /> Email Card
+                                                        </button>
+                                                        <button
                                                             onClick={() => setKycViewModal({ open: true, memberId: card.id, memberName: card.name })}
                                                             className="text-xs text-teal-600 hover:text-teal-700 font-medium px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors"
                                                         >
@@ -359,6 +373,16 @@ export function ECardsView({ initialCards, availableMembers }: ECardsViewProps) 
                 memberId={editReqModal.memberId}
                 memberName={editReqModal.memberName}
             />
+
+            {/* Email E-Card Modal */}
+            {emailModal.card && (
+                <EmailECardModal
+                    isOpen={emailModal.open}
+                    onClose={() => setEmailModal({ open: false, card: null })}
+                    cardName={emailModal.card.name}
+                    card={emailModal.card}
+                />
+            )}
         </div>
     );
 }

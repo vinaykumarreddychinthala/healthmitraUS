@@ -38,8 +38,10 @@ import {
   Pill,
   User,
   AlertCircle,
+  Eye,
 } from "lucide-react";
 import { createServiceRequest } from "@/app/actions/service-requests";
+import { submitClaim } from "@/app/actions/reimbursements";
 import type { ServiceRequestContext } from '@/components/client/services/PlanPolicySelector';
 
 // Terms Modal Component
@@ -333,6 +335,220 @@ const formSchema = z.object({
   startDate: z.string().optional(),
   requirements: z.string().optional(),
   caretakerGender: z.string().optional(),
+  
+  // New caretaker fields
+  pocName: z.string().optional(),
+  pocPhone: z.string().optional(),
+  pocEmail: z.string().optional(),
+  pocRelation: z.string().optional(),
+  
+  patientFirstName: z.string().optional(),
+  patientLastName: z.string().optional(),
+  patientHeight: z.string().optional(),
+  patientGender: z.string().optional(),
+  patientWeight: z.string().optional(),
+  patientLanguage: z.string().optional(),
+  hasLift: z.string().optional(),
+  hasParking: z.string().optional(),
+  
+  addressCountry: z.string().optional(),
+  addressStreet: z.string().optional(),
+  addressCity: z.string().optional(),
+  addressState: z.string().optional(),
+  addressPincode: z.string().optional(),
+  addressLandmark: z.string().optional(),
+  
+  caretakerServiceRequirement: z.string().optional(),
+  caretakerServiceHours: z.string().optional(),
+  caretakerDuration: z.string().optional(),
+  caretakerStartDate: z.string().optional(),
+  caretakerStartTime: z.string().optional(),
+  caretakerEndTime: z.string().optional(),
+  
+  healthConditions: z.array(z.string()).optional(),
+  mobilityLevel: z.string().optional(),
+  medicalEquipment: z.array(z.string()).optional(),
+  
+  supportBathing: z.string().optional(),
+  supportGrooming: z.string().optional(),
+  supportDressing: z.string().optional(),
+  supportToileting: z.string().optional(),
+  diaperUsage: z.string().optional(),
+  
+  medicationAssistanceLevel: z.string().optional(),
+  allergies: z.string().optional(),
+  
+  emergencyContactName: z.string().optional(),
+  emergencyContactPhone: z.string().optional(),
+  emergencyContactRelation: z.string().optional(),
+  primaryDoctorName: z.string().optional(),
+  preferredHospital: z.string().optional(),
+  
+  caretakerReligionPreference: z.string().optional(),
+  caretakerLanguage: z.string().optional(),
+  caretakerExpectations: z.string().optional(),
+  caretakerAdditionalNotes: z.string().optional(),
+
+  // Bill Reimbursement fields
+  billType: z.string().optional(),
+  hospitalName: z.string().optional(),
+  department: z.string().optional(),
+  visitDate: z.string().optional(),
+  doctorContact: z.string().optional(),
+  doctorFees: z.string().optional(),
+  discount: z.string().optional(),
+  billNumber: z.string().optional(),
+  address: z.string().optional(),
+  medicalIssue: z.string().optional(),
+  // Pharmacy-specific
+  pharmacyName: z.string().optional(),
+  pharmacyAddress: z.string().optional(),
+  pharmacyContact: z.string().optional(),
+  pharmacyFees: z.string().optional(),
+  pharmacyDiscount: z.string().optional(),
+  pharmacyBillNo: z.string().optional(),
+  pharmacyPurchaseDate: z.string().optional(),
+  // Test centre-specific
+  testCentreName: z.string().optional(),
+  testCentreAddress: z.string().optional(),
+  testCentreContact: z.string().optional(),
+  testCentreFees: z.string().optional(),
+  testCentreDiscount: z.string().optional(),
+  testCentreBillNo: z.string().optional(),
+  testDate: z.string().optional(),
+  // File Uploads
+  pharmacyBillFile: z.any().optional(),
+  pharmacyPrescriptionFile: z.any().optional(),
+  doctorBillFile: z.any().optional(),
+  doctorPrescriptionFile: z.any().optional(),
+  vaccinationBillFile: z.any().optional(),
+  vaccinationPrescriptionFile: z.any().optional(),
+  testBillFile: z.any().optional(),
+  testReportsFile: z.any().optional(),
+  // Vaccination-specific extra
+  vaccinationFees: z.string().optional(),
+  vaccinationDiscount: z.string().optional(),
+}).superRefine((data, ctx) => {
+  const requireField = (field: keyof typeof data, message: string) => {
+    const value = data[field];
+    const isFileList = typeof window !== 'undefined' && value instanceof FileList;
+    if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '') || (Array.isArray(value) && value.length === 0) || (isFileList && value.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [field as string],
+        message,
+      });
+    }
+  };
+
+  if (data.type === 'ambulance') {
+    requireField('patientName', 'Patient name is required');
+    requireField('patientAge', 'Patient age is required');
+    requireField('patientPhone', 'Patient phone is required');
+    requireField('pickupAddressLine1', 'Pickup address is required');
+    requireField('pickupCity', 'Pickup city is required');
+    requireField('pickupState', 'Pickup state is required');
+    requireField('pickupPincode', 'Pickup pincode is required');
+  } else if (data.type === 'medical_consultation') {
+    requireField('patientName', 'Patient name is required');
+    requireField('patientAge', 'Patient age is required');
+    requireField('patientPhoneNumber', 'Patient phone is required');
+    requireField('specialization', 'Specialization is required');
+    requireField('preferredDate', 'Preferred date is required');
+    requireField('preferredTimeSlot', 'Preferred time slot is required');
+  } else if (data.type === 'diagnostic') {
+    requireField('testNames', 'Please select at least one test');
+    requireField('patientName', 'Patient name is required');
+    requireField('patientAge', 'Patient age is required');
+    requireField('collectionAddress', 'Collection address is required');
+  } else if (data.type === 'caretaker') {
+    requireField('patientFirstName', 'Patient first name is required');
+    requireField('patientLastName', 'Patient last name is required');
+    requireField('patientAge', 'Patient age is required');
+    requireField('patientGender', 'Patient gender is required');
+    requireField('addressStreet', 'Address is required');
+    requireField('addressCity', 'City is required');
+    requireField('addressPincode', 'Pincode is required');
+    requireField('caretakerServiceRequirement', 'Service requirement is required');
+    requireField('caretakerStartDate', 'Start date is required');
+    requireField('caretakerDuration', 'Duration is required');
+    requireField('caretakerGender', 'Preferred caregiver gender is required');
+  } else if (data.type === 'nursing') {
+    requireField('serviceType', 'Nursing procedure is required');
+    requireField('duration', 'Duration is required');
+  } else if (data.type === 'companion') {
+    requireField('pocName', 'POC name is required');
+    requireField('pocPhone', 'POC phone is required');
+    requireField('pocEmail', 'POC email is required');
+    requireField('pocRelation', 'POC relationship is required');
+    
+    requireField('patientFirstName', 'Patient first name is required');
+    requireField('patientLastName', 'Patient last name is required');
+    requireField('patientAge', 'Age is required');
+    requireField('patientHeight', 'Height is required');
+    requireField('patientGender', 'Gender is required');
+    requireField('patientWeight', 'Weight is required');
+    requireField('patientLanguage', 'Primary language is required');
+    requireField('hasLift', 'Lift availability is required');
+    requireField('hasParking', 'Parking availability is required');
+    
+    requireField('addressCountry', 'Country is required');
+    requireField('addressStreet', 'Street address is required');
+    requireField('addressCity', 'City is required');
+    requireField('addressState', 'State/Province is required');
+    requireField('addressPincode', 'ZIP/Postal Code is required');
+    
+    requireField('caretakerServiceHours', 'Service hours type is required');
+    requireField('caretakerDuration', 'Service duration is required');
+    requireField('caretakerStartDate', 'Service start date is required');
+    requireField('caretakerStartTime', 'Service start time is required');
+    requireField('caretakerEndTime', 'Service end time is required');
+    
+    requireField('healthConditions', 'Please select at least one health condition');
+    requireField('mobilityLevel', 'Mobility level is required');
+  } else if (data.type === 'bill_reimbursement') {
+    requireField('billType', 'Bill type is required');
+    if (data.billType === 'OPD Pharmacy') {
+      requireField('pharmacyName', 'Pharmacy name is required');
+      requireField('pharmacyAddress', 'Pharmacy address is required');
+      requireField('pharmacyContact', 'Contact is required');
+      requireField('pharmacyFees', 'Fees paid is required');
+      requireField('pharmacyBillNo', 'Bill number is required');
+      requireField('pharmacyPurchaseDate', 'Purchase date is required');
+      requireField('pharmacyBillFile', 'Bill upload is required');
+      requireField('pharmacyPrescriptionFile', 'Prescription upload is required');
+    } else if (data.billType === 'OPD Doctor Consultations') {
+      requireField('hospitalName', 'Hospital/Doctor name is required');
+      requireField('department', 'Department is required');
+      requireField('visitDate', 'Visit date is required');
+      requireField('doctorContact', 'Contact is required');
+      requireField('doctorFees', 'Fees is required');
+      requireField('billNumber', 'Bill number is required');
+      requireField('address', 'Address is required');
+      requireField('doctorBillFile', 'Bill upload is required');
+      requireField('doctorPrescriptionFile', 'Prescription upload is required');
+    } else if (data.billType === 'OPD Vaccination') {
+      requireField('hospitalName', 'Hospital/Clinic name is required');
+      requireField('department', 'Department is required');
+      requireField('visitDate', 'Visit date is required');
+      requireField('doctorContact', 'Contact is required');
+      requireField('billNumber', 'Bill number is required');
+      requireField('doctorFees', 'Fees is required');
+      requireField('vaccinationFees', 'Vaccination fees is required');
+      requireField('address', 'Address is required');
+      requireField('vaccinationBillFile', 'Bill upload is required');
+      requireField('vaccinationPrescriptionFile', 'Prescription upload is required');
+    } else if (data.billType === 'OPD Test') {
+      requireField('testCentreName', 'Test centre name is required');
+      requireField('testCentreAddress', 'Test centre address is required');
+      requireField('testCentreContact', 'Contact is required');
+      requireField('testCentreFees', 'Fees paid is required');
+      requireField('testCentreBillNo', 'Bill number is required');
+      requireField('testDate', 'Test date is required');
+      requireField('testBillFile', 'Bill upload is required');
+      requireField('testReportsFile', 'Reports upload is required');
+    }
+  }
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -380,6 +596,24 @@ const NEARBY_HOSPITALS = [
   },
 ];
 
+const FileUploadPreview = ({ form, name, label, accept = "image/*,.pdf" }: { form: any, name: string, label: string, accept?: string }) => {
+  const fileList = form.watch(name);
+  const file = fileList && fileList.length > 0 ? fileList[0] : null;
+  const fileUrl = file ? URL.createObjectURL(file) : null;
+  
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-bold text-slate-900">{label}</Label>
+      <Input type="file" accept={accept} {...form.register(name)} className="h-11 bg-white cursor-pointer file:mr-4 file:py-2.5 file:px-4 file:border-0 file:bg-slate-100 file:text-slate-700 file:text-sm file:font-medium hover:file:bg-slate-200 file:-ml-3" />
+      {fileUrl && (
+        <a href={fileUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-600 hover:underline flex items-center gap-1 mt-1">
+          <Eye className="w-4 h-4" /> View Uploaded File
+        </a>
+      )}
+    </div>
+  );
+};
+
 export function ServiceRequestForm({
   initialType,
   userProfile,
@@ -413,16 +647,54 @@ export function ServiceRequestForm({
   // Pre-fill patient phone from policy holder
   const policyHolderPhone = serviceContext?.policyHolder?.contactNumber || '';
 
-  // Calculate age from dob
-  const getAge = (dobString?: string | null) => {
+  // Helper: calculate age from a dob string
+  const calcAge = (dobString?: string | null): string => {
     if (!dobString) return '';
     const dob = new Date(dobString);
     if (isNaN(dob.getTime())) return '';
-    const diff_ms = Date.now() - dob.getTime();
-    const age_dt = new Date(diff_ms);
-    return Math.abs(age_dt.getUTCFullYear() - 1970).toString();
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+    return String(age);
   };
-  const policyHolderAge = getAge(serviceContext?.policyHolder?.dob);
+
+  const policyHolderAge = calcAge(serviceContext?.policyHolder?.dob);
+
+  // Helper: build all profile-derived default values
+  const buildProfileDefaults = (profile: any) => {
+    if (!profile) return {};
+    const name = profile.full_name || '';
+    const nameParts = name.split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ');
+    const age = calcAge(profile.dob);
+    const phone = profile.phone || '';
+    const fullAddress = [profile.address_line1, profile.address_line2].filter(Boolean).join(', ');
+    const city = profile.city || '';
+    const pincode = profile.pincode || '';
+    return {
+      // Name fields
+      patientName: policyHolderName || name,
+      patientFirstName: firstName,
+      patientLastName: lastName,
+      // Age
+      patientAge: policyHolderAge || age,
+      // Phone
+      patientPhone: policyHolderPhone || phone,
+      patientPhoneNumber: policyHolderPhone || phone,
+      // Address fields used in various forms
+      pickupAddressLine1: fullAddress,
+      collectionAddress: fullAddress,
+      address: fullAddress,
+      addressStreet: fullAddress,
+      pickupCity: city,
+      destinationCity: city,
+      addressCity: city,
+      pickupPincode: pincode,
+      addressPincode: pincode,
+    };
+  };
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -435,45 +707,49 @@ export function ServiceRequestForm({
       urgency: "scheduled",
       consultationType: "video",
       isFasting: "no",
-      // Pre-fill patient info from policy holder
+      // Pre-fill from policy holder (always available synchronously)
       patientName: policyHolderName,
       patientPhone: policyHolderPhone,
       patientPhoneNumber: policyHolderPhone,
       patientAge: policyHolderAge,
+      // Profile-derived fields will be reset() in below effect once profile loads
     },
   });
 
+  // When userProfile becomes available (async), reset form with merged defaults.
+  // form.reset() is the correct API — it updates all registered fields including
+  // ones that haven't rendered yet (React Hook Form tracks them in its internal store).
+  useEffect(() => {
+    if (!userProfile) return;
+    const profileDefaults = buildProfileDefaults(userProfile);
+    form.reset({
+      // Preserve all current non-profile form state
+      ...form.getValues(),
+      // Overlay with profile values (only if not already set by policyHolder)
+      ...profileDefaults,
+      // Restore fixed fields that must not be overwritten by reset
+      type: form.getValues('type') || defaultType,
+      agreedToTerms: form.getValues('agreedToTerms'),
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile]);
+
   const watchType = form.watch("type");
+  const watchBillType = form.watch("billType");
   const watchUrgency = form.watch("urgency");
   const watchPreferredDate = form.watch("preferredDate");
 
   // Returns true if the given slot's START hour is already in the past for today.
-  // If no date is provided, treat as today (always filter past slots).
-  // e.g. at 8:28 AM, the 7 AM and 8 AM slots are past.
   const isSlotPast = (slotStartHour: number, dateStr?: string): boolean => {
     const today = new Date();
     if (dateStr) {
-      const selected = new Date(dateStr + 'T00:00:00'); // force local midnight
+      const selected = new Date(dateStr + 'T00:00:00');
       const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      // Only filter for today; future dates always show all slots
       if (selected.getTime() !== todayMidnight.getTime()) return false;
     }
-    // Slot is past if its start hour has already begun (including partial hours)
     return slotStartHour < today.getHours() ||
       (slotStartHour === today.getHours() && today.getMinutes() > 0);
   };
-
-  useEffect(() => {
-    if (!policyHolderPhone && userProfile?.phone) {
-      form.setValue("patientPhone", userProfile.phone);
-      form.setValue("patientPhoneNumber", userProfile.phone);
-    }
-    if (userProfile?.address)
-      form.setValue("pickupAddressLine1", userProfile.address);
-    if (userProfile?.city) form.setValue("pickupCity", userProfile.city);
-    if (userProfile?.pincode)
-      form.setValue("pickupPincode", userProfile.pincode);
-  }, [userProfile, form, policyHolderPhone]);
 
   const getCurrentLocation = () => {
     setLocationLoading(true);
@@ -550,6 +826,30 @@ export function ServiceRequestForm({
 
     setIsSubmitting(true);
     try {
+      if (data.type === "bill_reimbursement") {
+        // Send to reimbursement_claims so admin can process with amount and wallet logic
+        const claimData = {
+          plan_id: serviceContext?.plan?.planId,
+          plan_name: serviceContext?.plan?.planName,
+          patient_name: serviceContext?.policyHolder?.holderFullName || "Myself",
+          hospital_name: data.hospitalName,
+          treatment_date: data.visitDate,
+          amount: parseFloat(data.doctorFees || "0"),
+          diagnosis: data.medicalIssue || data.department,
+          documents: [], // Handle files later if needed
+        };
+        const result = await submitClaim(claimData);
+        if (result.success) {
+          toast.success("Reimbursement claim submitted successfully!");
+          router.push("/reimbursements");
+          return;
+        } else {
+          toast.error("Failed to submit claim", { description: result.error });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const result = await createServiceRequest({
         type: data.type,
         memberId: data.memberId,
@@ -577,6 +877,15 @@ export function ServiceRequestForm({
       setIsSubmitting(false);
     }
   }
+
+  const onError = (errors: any) => {
+    const firstErrorKey = Object.keys(errors)[0];
+    if (firstErrorKey && errors[firstErrorKey]?.message) {
+      toast.error(errors[firstErrorKey].message);
+    } else {
+      toast.error("Please fill all mandatory fields to complete the form.");
+    }
+  };
 
   const getTitle = () => {
     const titles: Record<string, string> = {
@@ -635,7 +944,7 @@ export function ServiceRequestForm({
             </div>
           </div>
         ) : (
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6">
             {/* Service Selection */}
             <div className="space-y-2">
               <Label>Select Service</Label>
@@ -880,12 +1189,12 @@ export function ServiceRequestForm({
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       {...form.register("patientName")}
-                      placeholder="Patient Full Name"
+                      placeholder="Patient Full Name *"
                     />
                     <Input
                       type="number"
                       {...form.register("patientAge")}
-                      placeholder="Age"
+                      placeholder="Age *"
                     />
                   </div>
                   <Input
@@ -894,14 +1203,14 @@ export function ServiceRequestForm({
                         e.target.value = e.target.value.replace(/\D/g, "");
                       }
                     })}
-                    placeholder="Contact Number (Only Numbers)"
+                    placeholder="Contact Number (Only Numbers) *"
                     type="tel"
                     maxLength={10}
                   />
                 </div>
 
                 <div className="space-y-3">
-                  <Label>Choose Specialty</Label>
+                  <Label>Choose Specialty <span className="text-red-500">*</span></Label>
                   <Select
                     onValueChange={(val) => form.setValue("specialization", val)}
                   >
@@ -1000,7 +1309,7 @@ export function ServiceRequestForm({
             {watchType === "diagnostic" && (
               <div className="space-y-6">
                 <div className="space-y-3">
-                  <Label>Select Test Package</Label>
+                  <Label>Select Test Package <span className="text-red-500">*</span></Label>
                   <Select
                     onValueChange={(val) => form.setValue("testNames", [val])}
                   >
@@ -1029,7 +1338,7 @@ export function ServiceRequestForm({
                   <div className="grid grid-cols-2 gap-4">
                     <Input
                       {...form.register("patientName")}
-                      placeholder="Patient Name"
+                      placeholder="Patient Name *"
                     />
                     <Input
                       type="number"
@@ -1064,7 +1373,7 @@ export function ServiceRequestForm({
                 </div>
 
                 <div className="space-y-3">
-                  <Label>Collection Address</Label>
+                  <Label>Collection Address <span className="text-red-500">*</span></Label>
                   <Textarea
                     {...form.register("collectionAddress")}
                     placeholder="Full address for home sample collection"
@@ -1175,7 +1484,7 @@ export function ServiceRequestForm({
             {watchType === "nursing" && (
               <div className="space-y-6">
                 <div className="space-y-3">
-                  <Label>Nursing Procedure Needed</Label>
+                  <Label>Nursing Procedure Needed <span className="text-red-500">*</span></Label>
                   <Select
                     onValueChange={(val) => form.setValue("serviceType", val)}
                   >
@@ -1197,7 +1506,7 @@ export function ServiceRequestForm({
                 </div>
 
                 <div className="space-y-3">
-                  <Label>Duration</Label>
+                  <Label>Duration <span className="text-red-500">*</span></Label>
                   <Select onValueChange={(val) => form.setValue("duration", val)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select duration" />
@@ -1223,75 +1532,583 @@ export function ServiceRequestForm({
             )}
             {/* ===== COMPANION SERVICES ===== */}
             {watchType === "companion" && (
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <Label>Requirement for Booking a Companion</Label>
-                  <Textarea
-                    {...form.register("requirements")}
-                    placeholder="Describe what you need the companion for..."
-                    rows={3}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <Label>Preferred Date</Label>
-                    <Input
-                      type="date"
-                      min={new Date().toISOString().split('T')[0]}
-                      {...form.register("preferredDate")}
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <Label>Preferred Time</Label>
-                    <Input
-                      type="time"
-                      min={(() => {
-                        // When today is selected, restrict to times from now onwards
-                        const today = new Date();
-                        const todayStr = today.toISOString().split('T')[0];
-                        if (watchPreferredDate === todayStr) {
-                          const hh = String(today.getHours()).padStart(2, '0');
-                          const mm = String(today.getMinutes()).padStart(2, '0');
-                          return `${hh}:${mm}`;
-                        }
-                        return undefined;
-                      })()}
-                      {...form.register("preferredTimeSlot")}
-                    />
+              <div className="space-y-8">
+                {/* Point of Contact */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-slate-800 border-b pb-2">POINT OF CONTACT (POC) HEALTHMITRA</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <Label>Name of Point of Contact (POC) <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("pocName")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>POC Phone Number <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("pocPhone", {
+                          onChange: (e) => {
+                            e.target.value = e.target.value.replace(/\D/g, "");
+                          }
+                        })} type="tel" maxLength={10} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Email Address of POC <span className="text-red-500">*</span></Label>
+                      <Input type="email" {...form.register("pocEmail")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Relationship to Patient <span className="text-red-500">*</span></Label>
+                      <Select onValueChange={(v) => form.setValue("pocRelation", v)}>
+                        <SelectTrigger><SelectValue placeholder="Choose" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Spouse">Spouse</SelectItem>
+                          <SelectItem value="Child">Child</SelectItem>
+                          <SelectItem value="Parent">Parent</SelectItem>
+                          <SelectItem value="Sibling">Sibling</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <Label>How many hours?</Label>
-                  <Select onValueChange={(val) => form.setValue("duration", val)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select duration" />
+                {/* Patient Details */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-slate-800 border-b pb-2">PATIENT DETAILS</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <Label>Patient First Name <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("patientFirstName")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Patient Last Name <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("patientLastName")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Age (in years) <span className="text-red-500">*</span></Label>
+                      <Input type="number" {...form.register("patientAge")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Height (in feet and inches or centimeters) <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("patientHeight")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Gender <span className="text-red-500">*</span></Label>
+                      <RadioGroup onValueChange={(v) => form.setValue("patientGender", v)} className="flex flex-col space-y-1 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="Female" id="comp-gender-female" />
+                          <Label htmlFor="comp-gender-female">Female</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="Male" id="comp-gender-male" />
+                          <Label htmlFor="comp-gender-male">Male</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="Other" id="comp-gender-other" />
+                          <Label htmlFor="comp-gender-other">Other</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Weight (in lbs or kg) <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("patientWeight")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Primary Language Spoken by Patient <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("patientLanguage")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Is a lift (elevator) available in the building/residence? <span className="text-red-500">*</span></Label>
+                      <RadioGroup onValueChange={(v) => form.setValue("hasLift", v)} className="flex flex-col space-y-1 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="Yes" id="comp-lift-yes" />
+                          <Label htmlFor="comp-lift-yes">Yes</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="No" id="comp-lift-no" />
+                          <Label htmlFor="comp-lift-no">No</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="Not Applicable" id="comp-lift-na" />
+                          <Label htmlFor="comp-lift-na">Not Applicable (Single floor residence)</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Is accessible parking available for caregivers? <span className="text-red-500">*</span></Label>
+                      <RadioGroup onValueChange={(v) => form.setValue("hasParking", v)} className="flex flex-col space-y-1 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="Yes (Dedicated spot)" id="comp-parking-yes-dedicated" />
+                          <Label htmlFor="comp-parking-yes-dedicated">Yes (Dedicated spot)</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="Yes (Street parking)" id="comp-parking-yes-street" />
+                          <Label htmlFor="comp-parking-yes-street">Yes (Street parking)</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="No" id="comp-parking-no" />
+                          <Label htmlFor="comp-parking-no">No</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  </div>
+                  <div className="space-y-3 mt-4">
+                    <Label>Address: Country <span className="text-red-500">*</span></Label>
+                    <Input {...form.register("addressCountry")} placeholder="Your answer" />
+                  </div>
+                  <div className="space-y-3">
+                    <Label>Address: Street/Floor/Apartment Number <span className="text-red-500">*</span></Label>
+                    <Input {...form.register("addressStreet")} placeholder="Your answer" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <Label>Address: City <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("addressCity")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Address: State/Region/Province <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("addressState")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Address: Postal/ZIP Code <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("addressPincode")} placeholder="Your answer" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Address: Landmark/Additional Directions</Label>
+                      <Input {...form.register("addressLandmark")} placeholder="Your answer" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Service Requirement */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-slate-800 border-b pb-2">SERVICE REQUIREMENT</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3 md:col-span-2">
+                      <Label>Type of Service Hours <span className="text-red-500">*</span></Label>
+                      <RadioGroup onValueChange={(v) => form.setValue("caretakerServiceHours", v)} className="flex flex-col space-y-1 mt-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="12-Hour Day" id="comp-hours-day" />
+                          <Label htmlFor="comp-hours-day">12-Hour Day</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="12-Hour Night" id="comp-hours-night" />
+                          <Label htmlFor="comp-hours-night">12-Hour Night</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="24-Hour Live-in" id="comp-hours-livein" />
+                          <Label htmlFor="comp-hours-livein">24-Hour Live-in</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Estimated Duration of Service Need <span className="text-red-500">*</span></Label>
+                      <Select onValueChange={(v) => form.setValue("caretakerDuration", v)}>
+                        <SelectTrigger><SelectValue placeholder="Choose" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1-3 Days">1-3 Days</SelectItem>
+                          <SelectItem value="1 Week">1 Week</SelectItem>
+                          <SelectItem value="2 Weeks">2 Weeks</SelectItem>
+                          <SelectItem value="1 Month">1 Month</SelectItem>
+                          <SelectItem value="Ongoing">Ongoing</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Service Start Date <span className="text-red-500">*</span></Label>
+                      <Input type="date" {...form.register("caretakerStartDate")} min={new Date().toISOString().split('T')[0]} />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Preferred Service Start Time <span className="text-red-500">*</span></Label>
+                      <Input type="time" {...form.register("caretakerStartTime")} />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Preferred Service End Time <span className="text-red-500">*</span></Label>
+                      <Input type="time" {...form.register("caretakerEndTime")} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Medical Care & Needs */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-slate-800 border-b pb-2">MEDICAL CARE &amp; NEEDS</h3>
+                  <div className="space-y-3">
+                    <Label>Primary Health Conditions/Diagnoses (Select all relevant) <span className="text-red-500">*</span></Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                      {[
+                        "Alzheimer's/Dementia",
+                        "Heart Disease",
+                        "Diabetes",
+                        "Stroke Recovery",
+                        "COPD/Respiratory Issues",
+                        "Cancer",
+                        "Parkinson's Disease",
+                        "Mobility Impairment",
+                        "Post-Surgical Recovery",
+                        "Other"
+                      ].map((condition) => (
+                        <div key={condition} className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`comp-condition-${condition.replace(/[^a-zA-Z]/g, '')}`} 
+                            onCheckedChange={(checked) => {
+                              const current = form.getValues("healthConditions") || [];
+                              if (checked) {
+                                form.setValue("healthConditions", [...current, condition]);
+                              } else {
+                                form.setValue("healthConditions", current.filter((c: string) => c !== condition));
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`comp-condition-${condition.replace(/[^a-zA-Z]/g, '')}`} className="font-normal">{condition}</Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3 mt-4">
+                    <Label>Patient Mobility Level <span className="text-red-500">*</span></Label>
+                    <Select onValueChange={(v) => form.setValue("mobilityLevel", v)}>
+                      <SelectTrigger><SelectValue placeholder="Choose" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Independent">Independent</SelectItem>
+                        <SelectItem value="Needs Assistance">Needs Assistance</SelectItem>
+                        <SelectItem value="Wheelchair Bound">Wheelchair Bound</SelectItem>
+                        <SelectItem value="Bedridden">Bedridden</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ===== CARETAKER SERVICES ===== */}
+            {watchType === "caretaker" && (
+              <div className="space-y-8">
+                {/* Patient Details */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-slate-800 border-b pb-2">Patient Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <Label>First Name <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("patientFirstName")} placeholder="First Name *" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Last Name <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("patientLastName")} placeholder="Last Name *" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Age <span className="text-red-500">*</span></Label>
+                      <Input type="number" {...form.register("patientAge")} placeholder="Age *" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Gender <span className="text-red-500">*</span></Label>
+                      <Select onValueChange={(v) => form.setValue("patientGender", v)}>
+                        <SelectTrigger><SelectValue placeholder="Select Gender" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Male">Male</SelectItem>
+                          <SelectItem value="Female">Female</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Weight (kg)</Label>
+                      <Input {...form.register("patientWeight")} placeholder="E.g., 70" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Height</Label>
+                      <Input {...form.register("patientHeight")} placeholder="E.g., 5'10" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address Details */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-slate-800 border-b pb-2">Address Details</h3>
+                  <div className="space-y-3">
+                    <Label>Full Address <span className="text-red-500">*</span></Label>
+                    <Textarea {...form.register("addressStreet")} placeholder="Street Address *" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <Label>City <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("addressCity")} placeholder="City *" />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Pincode <span className="text-red-500">*</span></Label>
+                      <Input {...form.register("addressPincode")} placeholder="Pincode *" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Service Requirement */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-slate-800 border-b pb-2">Service Requirement</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3 md:col-span-2">
+                      <Label>Requirement Type <span className="text-red-500">*</span></Label>
+                      <Select onValueChange={(v) => form.setValue("caretakerServiceRequirement", v)}>
+                        <SelectTrigger><SelectValue placeholder="Select Requirement" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Post-operative Care">Post-operative Care</SelectItem>
+                          <SelectItem value="Elderly Care">Elderly Care</SelectItem>
+                          <SelectItem value="Patient Care">Patient Care</SelectItem>
+                          <SelectItem value="Mother & Baby Care">Mother & Baby Care</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Start Date <span className="text-red-500">*</span></Label>
+                      <Input type="date" {...form.register("caretakerStartDate")} min={new Date().toISOString().split('T')[0]} />
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Duration <span className="text-red-500">*</span></Label>
+                      <Select onValueChange={(v) => form.setValue("caretakerDuration", v)}>
+                        <SelectTrigger><SelectValue placeholder="Duration" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1 Week">1 Week</SelectItem>
+                          <SelectItem value="1 Month">1 Month</SelectItem>
+                          <SelectItem value="Ongoing">Ongoing</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Caregiver Preferences */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-slate-800 border-b pb-2">Caregiver Preferences</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <Label>Preferred Gender <span className="text-red-500">*</span></Label>
+                      <Select onValueChange={(v) => form.setValue("caretakerGender", v)}>
+                        <SelectTrigger><SelectValue placeholder="Gender" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Male">Male</SelectItem>
+                          <SelectItem value="Female">Female</SelectItem>
+                          <SelectItem value="Any">Any</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-3">
+                      <Label>Language Preference</Label>
+                      <Input {...form.register("caretakerLanguage")} placeholder="E.g., Hindi, English" />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <Label>Additional Notes/Expectations</Label>
+                    <Textarea {...form.register("caretakerAdditionalNotes")} placeholder="Any other details..." />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ===== BILL REIMBURSEMENT ===== */}
+            {watchType === "bill_reimbursement" && (
+              <div className="space-y-6 max-h-[550px] overflow-y-auto pr-2 pb-4 scrollbar-thin scrollbar-thumb-slate-200">
+                
+                {/* Bill Type Selector */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-900">Bill Type</Label>
+                  <Select onValueChange={(val) => form.setValue("billType", val)}>
+                    <SelectTrigger className="h-11 w-full md:max-w-md bg-white">
+                      <SelectValue placeholder="Select Bill Type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="2-hours">2 hours</SelectItem>
-                      <SelectItem value="4-hours">4 hours</SelectItem>
-                      <SelectItem value="8-hours">8 hours</SelectItem>
-                      <SelectItem value="12-hours">12 hours</SelectItem>
-                      <SelectItem value="24-hours">24 hours</SelectItem>
+                      <SelectItem value="OPD Pharmacy">OPD Pharmacy</SelectItem>
+                      <SelectItem value="OPD Doctor Consultations">OPD Doctor Consultations</SelectItem>
+                      <SelectItem value="OPD Vaccination">OPD Vaccination</SelectItem>
+                      <SelectItem value="OPD Test">OPD Test</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div className="space-y-3">
-                  <Label>Address</Label>
-                  <Input {...form.register("pickupAddressLine1")} placeholder="Full Address" />
-                  <Input {...form.register("pickupPincode")} placeholder="Pincode" maxLength={6} />
-                </div>
+                {/* ── OPD PHARMACY ── */}
+                {watchBillType === "OPD Pharmacy" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 pt-2">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Pharmacy Name *</Label>
+                      <Input {...form.register("pharmacyName")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Pharmacy Address *</Label>
+                      <Input {...form.register("pharmacyAddress")} className="h-11 bg-white" />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Contact of Pharmacy *</Label>
+                      <Input {...form.register("pharmacyContact")} type="tel" maxLength={10} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Fees Paid at Pharmacy *</Label>
+                      <Input type="number" {...form.register("pharmacyFees")} className="h-11 bg-white" />
+                    </div>
 
-                <div className="space-y-3">
-                  <Label>Phone Number</Label>
-                  <Input {...form.register("patientPhone", {
-                      onChange: (e) => {
-                        e.target.value = e.target.value.replace(/\D/g, "");
-                      }
-                    })} type="tel" maxLength={10} placeholder="Contact Number" />
-                </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Discount if Any At Pharmacy *</Label>
+                      <Input type="number" {...form.register("pharmacyDiscount")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Bill No. of Pharmacy *</Label>
+                      <Input {...form.register("pharmacyBillNo")} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Date of Purchase *</Label>
+                      <Input type="date" {...form.register("pharmacyPurchaseDate")} className="h-11 bg-white" />
+                    </div>
+                    <FileUploadPreview form={form} name="pharmacyBillFile" label="Upload Bill *" />
+                    
+                    <FileUploadPreview form={form} name="pharmacyPrescriptionFile" label="Upload Prescription *" />
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-sm font-bold text-slate-900">Additional Details</Label>
+                      <Textarea {...form.register("medicalIssue")} rows={3} className="resize-none bg-white w-full" />
+                    </div>
+                  </div>
+                )}
+
+                {/* ── OPD DOCTOR CONSULTATIONS ── */}
+                {watchBillType === "OPD Doctor Consultations" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 pt-2">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Hospital/Doctor Name/Clinic/Cosmetic *</Label>
+                      <Input {...form.register("hospitalName")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Department *</Label>
+                      <Input {...form.register("department")} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Date of Visit *</Label>
+                      <Input type="date" {...form.register("visitDate")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Contact of Doctor/Hospital/Clinic/Dentist/Cosmetic *</Label>
+                      <Input {...form.register("doctorContact", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, ""); } })} type="tel" maxLength={10} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Fees of Doctor/Hospital/Clinic/Dentist/Cosmetic *</Label>
+                      <Input type="number" {...form.register("doctorFees")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Discount of Doctor/Hospital/Clinic/Dentist/Cosmetic (if any)</Label>
+                      <Input type="number" {...form.register("discount")} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Bill Number of Doctor/Hospital/Clinic/Dentist/Cosmetic *</Label>
+                      <Input {...form.register("billNumber")} className="h-11 bg-white" />
+                    </div>
+                    <FileUploadPreview form={form} name="doctorBillFile" label="Upload Bill *" />
+                    
+                    <FileUploadPreview form={form} name="doctorPrescriptionFile" label="Upload Prescription *" />
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-sm font-bold text-slate-900">Address of Doctor/Hospital/Clinic/Dentist/Cosmetic with City Name *</Label>
+                      <Textarea {...form.register("address")} rows={2} className="resize-none bg-white w-full" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-sm font-bold text-slate-900">Additional Details</Label>
+                      <Textarea {...form.register("medicalIssue")} rows={3} className="resize-none bg-white w-full" />
+                    </div>
+                  </div>
+                )}
+
+                {/* ── OPD VACCINATION ── */}
+                {watchBillType === "OPD Vaccination" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 pt-2">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Hospital/Doctor Name/Clinic *</Label>
+                      <Input {...form.register("hospitalName")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Department *</Label>
+                      <Input {...form.register("department")} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Date of Visit *</Label>
+                      <Input type="date" {...form.register("visitDate")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Contact of Doctor/Hospital/Clinic *</Label>
+                      <Input {...form.register("doctorContact", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, ""); } })} type="tel" maxLength={10} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Bill Number of Doctor/Hospital/Clinic *</Label>
+                      <Input {...form.register("billNumber")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Fees of Doctor/Hospital/Clinic *</Label>
+                      <Input type="number" {...form.register("doctorFees")} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Fees For Vaccination at Doctor/Hospital/Clinic *</Label>
+                      <Input type="number" {...form.register("vaccinationFees")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Discount at Doctor/Hospital/Clinic</Label>
+                      <Input type="number" {...form.register("vaccinationDiscount")} className="h-11 bg-white" />
+                    </div>
+
+                    <FileUploadPreview form={form} name="vaccinationBillFile" label="Upload Bill *" />
+                    <FileUploadPreview form={form} name="vaccinationPrescriptionFile" label="Upload Prescription *" />
+
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-sm font-bold text-slate-900">Address of Doctor/Hospital/Clinic with City Name *</Label>
+                      <Textarea {...form.register("address")} rows={2} className="resize-none bg-white w-full" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-sm font-bold text-slate-900">Additional Details</Label>
+                      <Textarea {...form.register("medicalIssue")} rows={3} className="resize-none bg-white w-full" />
+                    </div>
+                  </div>
+                )}
+
+                {/* ── OPD TEST ── */}
+                {watchBillType === "OPD Test" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 pt-2">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Test Centre Name *</Label>
+                      <Input {...form.register("testCentreName")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Test Centre Address *</Label>
+                      <Input {...form.register("testCentreAddress")} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Contact of Test Centre *</Label>
+                      <Input {...form.register("testCentreContact")} type="tel" maxLength={10} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Fees Paid at Test Centre *</Label>
+                      <Input type="number" {...form.register("testCentreFees")} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Discount if Any At Test Centre</Label>
+                      <Input type="number" {...form.register("testCentreDiscount")} className="h-11 bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Bill No. of Test Centre *</Label>
+                      <Input {...form.register("testCentreBillNo")} className="h-11 bg-white" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-bold text-slate-900">Date of Test Done *</Label>
+                      <Input type="date" {...form.register("testDate")} className="h-11 bg-white" />
+                    </div>
+                    <FileUploadPreview form={form} name="testBillFile" label="Upload Bill *" />
+
+                    <div className="md:col-span-2">
+                      <FileUploadPreview form={form} name="testReportsFile" label="Upload Reports *" />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="text-sm font-bold text-slate-900">Additional Details</Label>
+                      <Textarea {...form.register("medicalIssue")} rows={3} className="resize-none bg-white w-full" />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

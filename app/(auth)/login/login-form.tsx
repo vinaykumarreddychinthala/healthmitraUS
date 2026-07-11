@@ -25,7 +25,7 @@ function LoginFormContent() {
       if (result?.error) {
         toast.error("Login Failed", { description: result.error });
       } else if (result?.redirect) {
-        router.replace(result.redirect);
+        router.push(result.redirect);
         router.refresh();
       }
     } catch (err: any) {

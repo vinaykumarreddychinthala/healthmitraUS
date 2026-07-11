@@ -3,6 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 interface UploadModalProps {
     isOpen: boolean;
@@ -12,9 +13,10 @@ interface UploadModalProps {
 }
 
 export default function UploadDocumentModal({ isOpen, onClose, memberId, userId }: UploadModalProps) {
+    const router = useRouter();
     const [isUploading, setIsUploading] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [category, setCategory] = useState('Prescriptions');
+    const [category, setCategory] = useState('General Records');
     const [documentDate, setDocumentDate] = useState('');
     const [selectedMember, setSelectedMember] = useState(memberId || '');
     const [tags, setTags] = useState('');
@@ -32,6 +34,11 @@ export default function UploadDocumentModal({ isOpen, onClose, memberId, userId 
     const handleUpload = async () => {
         if (!selectedFile) {
             toast.error('Please select a file to upload');
+            return;
+        }
+        
+        if (!category || !documentDate) {
+            toast.error('Please fill all mandatory fields (Category and Document Date)');
             return;
         }
 
@@ -65,6 +72,7 @@ export default function UploadDocumentModal({ isOpen, onClose, memberId, userId 
                     user_id: userId,
                     member_id: (selectedMember === 'self' || selectedMember === '') ? null : selectedMember,
                     category,
+                    document_date: documentDate,
                     file_url: publicUrl,
                     name: selectedFile.name,
                     file_size: (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB',
@@ -82,6 +90,7 @@ export default function UploadDocumentModal({ isOpen, onClose, memberId, userId 
             setSelectedFile(null);
             setTags('');
             onClose();
+            router.refresh();
         } catch (error) {
             console.error('Upload error:', error);
             toast.error('Something went wrong');
@@ -109,10 +118,11 @@ export default function UploadDocumentModal({ isOpen, onClose, memberId, userId 
                                 onChange={(e) => setCategory(e.target.value)}
                                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                             >
-                                <option>Prescriptions</option>
-                                <option>Bills</option>
+                                <option>Doctor Consultant</option>
+                                <option>Medicine</option>
                                 <option>Test Reports</option>
                                 <option>General Records</option>
+                                <option>HealthMitra & ABHA</option>
                             </select>
                         </div>
                         <div className="space-y-2">

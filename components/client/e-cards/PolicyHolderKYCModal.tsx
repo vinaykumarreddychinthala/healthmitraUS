@@ -12,6 +12,7 @@ import {
     ShieldCheck, ChevronRight, ChevronLeft, AlertCircle, Camera, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
+import SignaturePad from '@/components/client/e-cards/SignaturePad';
 
 interface PolicyHolderKYCModalProps {
     isOpen: boolean;
@@ -45,10 +46,12 @@ export default function PolicyHolderKYCModal({
     const [aadhaarNumber, setAadhaarNumber] = useState('');
     const [aadhaarDeclaration, setAadhaarDeclaration] = useState(false);
     const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
+    const [aadhaarSignature, setAadhaarSignature] = useState<string | null>(null);
 
     const [panNumber, setPanNumber] = useState('');
     const [panDeclaration, setPanDeclaration] = useState(false);
     const [panFile, setPanFile] = useState<File | null>(null);
+    const [panSignature, setPanSignature] = useState<string | null>(null);
     const [photo, setPhoto] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
@@ -77,9 +80,9 @@ export default function PolicyHolderKYCModal({
 
     // Blood group is optional; all other personal fields are required
     const canProceedStep1 = holderFullName.trim().length >= 2 && relation !== '' && dob !== '' && gender !== '';
-    // Step 2: Aadhaar must be (12-digit number + file) OR declaration checked. PAN same rule.
-    const aadhaarValid = aadhaarDeclaration || (aadhaarNumber.replace(/\D/g, '').length === 12 && aadhaarFile !== null);
-    const panValid = panDeclaration || (panNumber.length === 10 && panFile !== null);
+    // Step 2: Aadhaar must be (12-digit number + file) OR (declaration checked + signature). PAN same rule.
+    const aadhaarValid = (aadhaarDeclaration && aadhaarSignature) || (!aadhaarDeclaration && aadhaarNumber.replace(/\D/g, '').length === 12 && aadhaarFile !== null);
+    const panValid = (panDeclaration && panSignature) || (!panDeclaration && panNumber.length === 10 && panFile !== null);
     const canProceedStep2 = aadhaarValid && panValid;
     const canProceedStep3 = photo !== null;
 
@@ -87,21 +90,29 @@ export default function PolicyHolderKYCModal({
         if (step === 1 && !canProceedStep1) { toast.error('Please fill in Name, Relation, Date of Birth and Gender to continue'); return; }
         if (step === 2) {
             if (!aadhaarValid) {
-                if (aadhaarNumber.replace(/\D/g, '').length !== 12) {
+                if (aadhaarDeclaration && !aadhaarSignature) {
+                    toast.error('Please provide your digital signature for the Aadhaar declaration');
+                    return;
+                }
+                if (!aadhaarDeclaration && aadhaarNumber.replace(/\D/g, '').length !== 12) {
                     toast.error('Please enter a valid 12-digit Aadhaar number or check the declaration');
                     return;
                 }
-                if (!aadhaarFile) {
+                if (!aadhaarDeclaration && !aadhaarFile) {
                     toast.error('Please upload your Aadhaar document or check the declaration');
                     return;
                 }
             }
             if (!panValid) {
-                if (panNumber.length !== 10) {
+                if (panDeclaration && !panSignature) {
+                    toast.error('Please provide your digital signature for the PAN declaration');
+                    return;
+                }
+                if (!panDeclaration && panNumber.length !== 10) {
                     toast.error('Please enter a valid 10-character PAN number or check the declaration');
                     return;
                 }
-                if (!panFile) {
+                if (!panDeclaration && !panFile) {
                     toast.error('Please upload your PAN document or check the declaration');
                     return;
                 }
@@ -126,10 +137,16 @@ export default function PolicyHolderKYCModal({
             formData.append('aadhaarNumber', aadhaarNumber.replace(/\D/g, ''));
             formData.append('aadhaarDeclaration', aadhaarDeclaration.toString());
             if (aadhaarFile) formData.append('aadhaarFile', aadhaarFile);
+            if (aadhaarDeclaration && aadhaarSignature) {
+                formData.append('aadhaarSignatureBase64', aadhaarSignature);
+            }
             
             formData.append('panNumber', panNumber);
             formData.append('panDeclaration', panDeclaration.toString());
             if (panFile) formData.append('panFile', panFile);
+            if (panDeclaration && panSignature) {
+                formData.append('panSignatureBase64', panSignature);
+            }
             formData.append('photo', photo);
 
             const res = await fetch('/api/kyc', { method: 'POST', body: formData });
@@ -327,12 +344,20 @@ export default function PolicyHolderKYCModal({
                                             setAadhaarDeclaration(!!v); 
                                             setAadhaarNumber(''); 
                                             setAadhaarFile(null);
+                                            if (!v) setAadhaarSignature(null);
                                         }}
                                     />
                                     <label htmlFor="aadhaarDecl" className="text-xs text-slate-600 leading-snug cursor-pointer">
                                         <strong>I hereby declare</strong> that I do not possess an Aadhaar card and take full responsibility for this declaration.
                                     </label>
                                 </div>
+                                {aadhaarDeclaration && (
+                                    <div className="pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <Label className="text-slate-600 text-xs mb-1 block">Digital Signature <span className="text-red-500">*</span></Label>
+                                        <SignaturePad onEnd={(b64) => setAadhaarSignature(b64)} />
+                                        {!aadhaarSignature && <p className="text-[10px] text-red-500 mt-1">Signature is required to proceed</p>}
+                                    </div>
+                                )}
                             </div>
 
                             {/* PAN */}
@@ -394,12 +419,20 @@ export default function PolicyHolderKYCModal({
                                             setPanDeclaration(!!v); 
                                             setPanNumber(''); 
                                             setPanFile(null);
+                                            if (!v) setPanSignature(null);
                                         }}
                                     />
                                     <label htmlFor="panDecl" className="text-xs text-slate-600 leading-snug cursor-pointer">
                                         <strong>I hereby declare</strong> that I do not possess a PAN card and take full responsibility for this declaration.
                                     </label>
                                 </div>
+                                {panDeclaration && (
+                                    <div className="pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <Label className="text-slate-600 text-xs mb-1 block">Digital Signature <span className="text-red-500">*</span></Label>
+                                        <SignaturePad onEnd={(b64) => setPanSignature(b64)} />
+                                        {!panSignature && <p className="text-[10px] text-red-500 mt-1">Signature is required to proceed</p>}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

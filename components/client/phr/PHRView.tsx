@@ -21,7 +21,16 @@ const PREDEFINED_CATEGORIES = [
 ];
 
 export function PHRView({ documents }: PHRViewProps) {
-    const allDocs = documents || [];
+    const validCategories = PREDEFINED_CATEGORIES.map(c => c.name).filter(n => n !== 'All');
+    
+    // Normalize categories: any category not in the predefined list becomes "General Records"
+    const allDocs = (documents || []).map(doc => {
+        let cat = doc.category;
+        if (!validCategories.includes(cat)) {
+            cat = 'General Records';
+        }
+        return { ...doc, category: cat };
+    });
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
     const [searchQuery, setSearchQuery] = useState('');
@@ -206,7 +215,7 @@ export function PHRView({ documents }: PHRViewProps) {
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <h4 className="font-semibold text-slate-800 text-sm truncate pr-6">{doc.name || doc.file_name}</h4>
-                                        <p className="text-xs text-slate-500 mt-0.5">{new Date(doc.uploaded_at || doc.created_at).toLocaleDateString()}</p>
+                                        <p suppressHydrationWarning className="text-xs text-slate-500 mt-0.5">{new Date(doc.uploaded_at || doc.created_at).toLocaleDateString()}</p>
                                         <div className="flex flex-wrap gap-1 mt-2">
                                             <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">{doc.category || 'Doc'}</span>
                                             {getAddedByBadge(doc.addedBy || 'user')}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Ambulance, MapPin, Clock, AlertTriangle, PhoneCall } from "lucide-react";
+import { Ambulance, MapPin, Clock, AlertTriangle, PhoneCall, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AmbulanceBookingWizardProps {
@@ -21,12 +21,91 @@ interface AmbulanceBookingWizardProps {
     onClose: () => void;
 }
 
+interface LocationData {
+    street: string;
+    sector: string;   // e.g. "Sector 62" (sublocality_level_2)
+    locality: string; // e.g. "Noida" (sublocality_level_1)
+    city: string;
+    pincode: string;
+    state: string;
+    country: string;
+    formattedAddress: string;
+}
+
+type LocationStatus = "idle" | "loading" | "success" | "error";
+
 export function AmbulanceBookingWizard({ isOpen, onClose }: AmbulanceBookingWizardProps) {
     const [step, setStep] = useState(1);
     const [urgency, setUrgency] = useState("immediate");
 
+    // Location state
+    const [locationStatus, setLocationStatus] = useState<LocationStatus>("idle");
+    const [locationError, setLocationError] = useState<string>("");
+    const [pickupLocation, setPickupLocation] = useState<LocationData>({
+        street: "",
+        sector: "",
+        locality: "",
+        city: "",
+        pincode: "",
+        state: "",
+        country: "",
+        formattedAddress: "",
+    });
+
     const handleNext = () => setStep(step + 1);
     const handleBack = () => setStep(step - 1);
+
+    const detectLocation = useCallback(async () => {
+        setLocationStatus("loading");
+        setLocationError("");
+
+        if (!navigator.geolocation) {
+            setLocationStatus("error");
+            setLocationError("Geolocation is not supported by your browser.");
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                try {
+                    const { latitude, longitude } = position.coords;
+                    const res = await fetch(
+                        `/api/geocode?lat=${latitude}&lng=${longitude}`
+                    );
+                    const data = await res.json();
+
+                    if (!res.ok) {
+                        throw new Error(data.error || "Failed to get location details.");
+                    }
+
+                    setPickupLocation(data as LocationData);
+                    setLocationStatus("success");
+                } catch (err: unknown) {
+                    setLocationStatus("error");
+                    setLocationError(
+                        err instanceof Error ? err.message : "Could not detect location."
+                    );
+                }
+            },
+            (geoError) => {
+                setLocationStatus("error");
+                switch (geoError.code) {
+                    case geoError.PERMISSION_DENIED:
+                        setLocationError("Location permission denied. Please allow access and try again.");
+                        break;
+                    case geoError.POSITION_UNAVAILABLE:
+                        setLocationError("Location information is unavailable.");
+                        break;
+                    case geoError.TIMEOUT:
+                        setLocationError("Location request timed out. Please try again.");
+                        break;
+                    default:
+                        setLocationError("An unknown error occurred.");
+                }
+            },
+            { timeout: 10000, maximumAge: 60000 }
+        );
+    }, []);
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -108,22 +187,152 @@ export function AmbulanceBookingWizard({ isOpen, onClose }: AmbulanceBookingWiza
                 {/* STEP 2: LOCATION */}
                 {step === 2 && (
                     <div className="space-y-6">
+                        {/* Pickup Location */}
                         <div className="space-y-4 p-4 border border-slate-200 rounded-xl bg-slate-50">
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-2 mb-1">
                                 <MapPin className="h-5 w-5 text-red-500" />
                                 <h4 className="font-semibold text-slate-900">Pickup Location</h4>
                             </div>
-                            <div className="space-y-2">
-                                <Label>Address *</Label>
-                                <Textarea placeholder="Enter detailed pickup address..." />
-                                <Button variant="outline" size="sm" className="w-full text-blue-600 gap-2">
-                                    <MapPin className="h-4 w-4" /> Use Current Location
-                                </Button>
+
+                            {/* Detect Location Button */}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className={cn(
+                                    "w-full gap-2 border-dashed transition-all",
+                                    locationStatus === "success"
+                                        ? "border-emerald-400 text-emerald-700 bg-emerald-50 hover:bg-emerald-50"
+                                        : "text-blue-600 hover:text-blue-700 hover:border-blue-400"
+                                )}
+                                onClick={detectLocation}
+                                disabled={locationStatus === "loading"}
+                            >
+                                {locationStatus === "loading" && (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                )}
+                                {locationStatus === "success" && (
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                )}
+                                {locationStatus === "idle" || locationStatus === "error" ? (
+                                    <MapPin className="h-4 w-4" />
+                                ) : null}
+
+                                {locationStatus === "loading"
+                                    ? "Detecting your location..."
+                                    : locationStatus === "success"
+                                    ? "Location detected — click to refresh"
+                                    : "Use Current Location (Auto-fill via GPS)"}
+                            </Button>
+
+                            {/* Error message */}
+                            {locationStatus === "error" && (
+                                <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
+                                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <span>{locationError}</span>
+                                </div>
+                            )}
+
+                            {/* Structured Address Fields */}
+                            <div className="grid grid-cols-1 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs text-slate-500 uppercase tracking-wide font-semibold">
+                                        Street Address
+                                    </Label>
+                                    <Input
+                                        placeholder="House No., Building, Street Name"
+                                        value={pickupLocation.street}
+                                        onChange={(e) =>
+                                            setPickupLocation((prev) => ({ ...prev, street: e.target.value }))
+                                        }
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-slate-500 uppercase tracking-wide font-semibold">
+                                            Sector / Block
+                                        </Label>
+                                        <Input
+                                            placeholder="e.g. Sector 62, Block A"
+                                            value={pickupLocation.sector}
+                                            onChange={(e) =>
+                                                setPickupLocation((prev) => ({ ...prev, sector: e.target.value }))
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-slate-500 uppercase tracking-wide font-semibold">
+                                            Locality
+                                        </Label>
+                                        <Input
+                                            placeholder="Neighbourhood / Area"
+                                            value={pickupLocation.locality}
+                                            onChange={(e) =>
+                                                setPickupLocation((prev) => ({ ...prev, locality: e.target.value }))
+                                            }
+                                        />
+                                    </div>
+                                </div>
+
+
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs text-slate-500 uppercase tracking-wide font-semibold">
+                                        City
+                                    </Label>
+                                    <Input
+                                        placeholder="City"
+                                        value={pickupLocation.city}
+                                        onChange={(e) =>
+                                            setPickupLocation((prev) => ({ ...prev, city: e.target.value }))
+                                        }
+                                    />
+                                </div>
+
+
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-slate-500 uppercase tracking-wide font-semibold">
+                                            Pincode
+                                        </Label>
+                                        <Input
+                                            placeholder="000000"
+                                            value={pickupLocation.pincode}
+                                            onChange={(e) =>
+                                                setPickupLocation((prev) => ({ ...prev, pincode: e.target.value }))
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-slate-500 uppercase tracking-wide font-semibold">
+                                            State
+                                        </Label>
+                                        <Input
+                                            placeholder="State"
+                                            value={pickupLocation.state}
+                                            onChange={(e) =>
+                                                setPickupLocation((prev) => ({ ...prev, state: e.target.value }))
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-slate-500 uppercase tracking-wide font-semibold">
+                                            Country
+                                        </Label>
+                                        <Input
+                                            placeholder="Country"
+                                            value={pickupLocation.country}
+                                            onChange={(e) =>
+                                                setPickupLocation((prev) => ({ ...prev, country: e.target.value }))
+                                            }
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
+                        {/* Destination */}
                         <div className="space-y-4 p-4 border border-slate-200 rounded-xl bg-white">
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-2 mb-1">
                                 <MapPin className="h-5 w-5 text-green-500" />
                                 <h4 className="font-semibold text-slate-900">Destination</h4>
                             </div>
@@ -137,6 +346,7 @@ export function AmbulanceBookingWizard({ isOpen, onClose }: AmbulanceBookingWiza
                             </div>
                         </div>
 
+                        {/* Timing */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Required Time *</Label>
@@ -150,7 +360,7 @@ export function AmbulanceBookingWizard({ isOpen, onClose }: AmbulanceBookingWiza
                                     </SelectContent>
                                 </Select>
                             </div>
-                            {urgency === 'scheduled' && (
+                            {urgency === "scheduled" && (
                                 <div className="space-y-2">
                                     <Label>Time</Label>
                                     <Input type="datetime-local" />
@@ -175,6 +385,26 @@ export function AmbulanceBookingWizard({ isOpen, onClose }: AmbulanceBookingWiza
                             </div>
                         </div>
 
+                        {/* Show detected pickup address in confirm step */}
+                        {pickupLocation.formattedAddress && (
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-1">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+                                    <MapPin className="h-4 w-4 text-red-500" />
+                                    Pickup Location
+                                </div>
+                                <p className="text-xs text-slate-600">{pickupLocation.formattedAddress}</p>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
+                                    {pickupLocation.street && <span><span className="font-medium">Street:</span> {pickupLocation.street}</span>}
+                                    {pickupLocation.sector && <span><span className="font-medium">Sector:</span> {pickupLocation.sector}</span>}
+                                    {pickupLocation.locality && <span><span className="font-medium">Locality:</span> {pickupLocation.locality}</span>}
+                                    {pickupLocation.city && <span><span className="font-medium">City:</span> {pickupLocation.city}</span>}
+                                    {pickupLocation.pincode && <span><span className="font-medium">Pincode:</span> {pickupLocation.pincode}</span>}
+                                    {pickupLocation.state && <span><span className="font-medium">State:</span> {pickupLocation.state}</span>}
+                                    {pickupLocation.country && <span><span className="font-medium">Country:</span> {pickupLocation.country}</span>}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex items-start space-x-2">
                             <Checkbox id="emergency-auth" />
                             <Label htmlFor="emergency-auth" className="text-sm text-slate-700 leading-tight font-medium">
@@ -183,7 +413,6 @@ export function AmbulanceBookingWizard({ isOpen, onClose }: AmbulanceBookingWiza
                         </div>
                     </div>
                 )}
-
 
                 <DialogFooter className="mt-8 flex justify-between items-center w-full sm:justify-between">
                     <Button

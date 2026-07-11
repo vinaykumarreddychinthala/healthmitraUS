@@ -54,6 +54,7 @@ export const sendMail = async ({
     subject,
     html,
     devData,
+    attachments,
 }: {
     to: string;
     subject: string;
@@ -64,6 +65,8 @@ export const sendMail = async ({
      * Example: { 'User ID': 'HM-123456', Password: 'abc123!' }
      */
     devData?: Record<string, string>;
+    /** Optional nodemailer attachments (e.g. image files, PDFs) */
+    attachments?: any[];
 }) => {
     // Always log FIRST, before any SMTP attempt, so it always appears in terminal
     if (process.env.NODE_ENV !== 'production') {
@@ -92,6 +95,7 @@ export const sendMail = async ({
             to,
             subject,
             html,
+            ...(attachments && attachments.length > 0 ? { attachments } : {}),
         });
 
         console.log(`✅  Mail delivered: ${info.messageId}`);

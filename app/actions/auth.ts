@@ -49,30 +49,26 @@ export async function login(formData: FormData) {
 
   if (authData?.user) {
     const adminClient = await createAdminClient();
-    const { data: profile, error: profileError } = await adminClient
-      .from("profiles")
-      .select("role")
-      .eq("id", authData.user.id)
-      .single();
+    const today = new Date().toISOString().split('T')[0];
 
-    if (profileError) {
-      console.error("Error fetching admin profile:", profileError);
+    // Run profile + members fetch in parallel to cut sequential round-trips
+    const [profileResult, membersResult] = await Promise.all([
+      adminClient.from("profiles").select("role").eq("id", authData.user.id).single(),
+      adminClient.from('ecard_members').select('id, valid_till').eq('user_id', authData.user.id),
+    ]);
+
+    if (profileResult.error) {
+      console.error("Error fetching admin profile:", profileResult.error);
     }
 
-    if (profile?.role === "admin") {
+    if (profileResult.data?.role === "admin") {
       revalidatePath("/", "layout");
       return { success: true, redirect: "/admin/dashboard" };
     }
 
-    // For customers, check if they have any active members/plans
-    const today = new Date().toISOString().split('T')[0];
-    const { data: allMembers, error: membersError } = await adminClient
-      .from('ecard_members')
-      .select('id, valid_till')
-      .eq('user_id', authData.user.id);
-
-    if (membersError) {
-      console.error("Error fetching member plans:", membersError);
+    const allMembers = membersResult.data;
+    if (membersResult.error) {
+      console.error("Error fetching member plans:", membersResult.error);
     }
 
     if (!allMembers || allMembers.length === 0) {
@@ -80,7 +76,7 @@ export async function login(formData: FormData) {
       return { error: "No active plan found. Please go and buy a plan." };
     }
 
-    const hasActivePlan = allMembers.some(m => m.valid_till && m.valid_till >= today);
+    const hasActivePlan = allMembers.some((m: any) => m.valid_till && m.valid_till >= today);
     if (!hasActivePlan) {
       await supabase.auth.signOut();
       return { error: "Your plan has expired. Please go and buy the plan again." };
@@ -88,8 +84,8 @@ export async function login(formData: FormData) {
 
     // Check KYC status — redirect directly so there's no double-redirect
     const activeIds = allMembers
-      .filter(m => m.valid_till && m.valid_till >= today)
-      .map(m => m.id);
+      .filter((m: any) => m.valid_till && m.valid_till >= today)
+      .map((m: any) => m.id);
 
     if (activeIds.length > 0) {
       const { data: kycRecords } = await adminClient
@@ -100,7 +96,7 @@ export async function login(formData: FormData) {
         .in('member_id', activeIds);
 
       const completedKycIds = new Set((kycRecords || []).map((k: { member_id: string }) => k.member_id));
-      const hasPendingKyc = activeIds.some(id => !completedKycIds.has(id));
+      const hasPendingKyc = activeIds.some((id: string) => !completedKycIds.has(id));
 
       if (hasPendingKyc) {
         revalidatePath("/", "layout");

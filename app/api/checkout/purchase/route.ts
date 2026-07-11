@@ -115,7 +115,7 @@ export async function POST(request: Request) {
         const startDate = new Date();
         const expiryDate = new Date();
         const planDurationDays = plan.duration_days || 365;
-        expiryDate.setDate(expiryDate.getDate() + planDurationDays);
+        expiryDate.setDate(expiryDate.getDate() + Math.max(0, planDurationDays - 1));
 
         // Ensure profile exists — use admin client to bypass RLS
         try {
@@ -272,15 +272,19 @@ export async function POST(request: Request) {
         });
 
         // Create invoice record — use admin client
-        const gstAmount = 0;
-        const totalAmount = finalAmount;
+        let baseAmount = finalAmount;
+        let gstAmount = 0;
+        if (paymentMethod === 'razorpay') {
+            baseAmount = Number((finalAmount / 1.18).toFixed(2));
+            gstAmount = Number((finalAmount - baseAmount).toFixed(2));
+        }
         
         const { error: invoiceError } = await adminClient.from('invoices').insert({
             user_id: user.id,
             plan_id: planId,
             invoice_number: `INV-${Date.now()}${crypto.randomUUID().replace(/-/g,'').slice(0,6).toUpperCase()}`,
             plan_name: plan.name,
-            amount: finalAmount,
+            amount: baseAmount,
             gst: gstAmount,
             total: finalAmount,
             payment_method: paymentMethod || 'test',
@@ -301,55 +305,19 @@ export async function POST(request: Request) {
             const domain = process.env.NEXT_PUBLIC_APP_URL || 'https://healthmitraus.com';
             const planUrl = plan.slug ? `${domain}/plans/${plan.slug}` : `${domain}/plans`;
 
-            // 1️⃣ Plan Purchase Welcome Email
-            if (isFirstTimeUser) {
-                await sendMail({
-                    to: user.email,
-                    subject: `Welcome to HealthMitra - Your ${plan.name} Membership Details`,
-                    devData: { 'User ID': user.email, 'Password': generatedPassword, 'Email': user.email },
-                    html: planPurchaseConfirmationTemplate({
-                        customerName: name,
-                        userId: user.email,
-                        password: generatedPassword,
-                        planName: plan.name,
-                        transactionId: transactionId || 'N/A',
-                        amount: totalAmount,
-                        partnerName: gatewayName,
-                        planUrl
-                    })
-                });
-            } else {
-                await sendMail({
-                    to: user.email,
-                    subject: `Confirmation of Your HealthMitra Plan Purchase`,
-                    devData: { 'Email': user.email, 'Note': 'Existing user — password unchanged' },
-                    html: planRepurchaseConfirmationTemplate({
-                        customerName: name,
-                        planName: plan.name,
-                        transactionId: transactionId || 'N/A',
-                        amount: totalAmount,
-                        partnerName: gatewayName,
-                        currency: 'USD',
-                        planUrl
-                    })
-                });
-            }
-
-            // Send Payment Receipt
             await sendMail({
                 to: user.email,
-                subject: `Payment Receipt for ${plan.name} - HealthMitra`,
-                html: paymentReceiptTemplate({
+                subject: `Welcome to HealthMitra - Your ${plan.name} Membership Details`,
+                devData: { 'User ID': user.email, 'Password': isFirstTimeUser ? generatedPassword : 'unchanged', 'Email': user.email },
+                html: planPurchaseWelcomeTemplate({
                     customerName: name,
-                    customerPhone: user.user_metadata?.phone || '',
-                    customerEmail: user.email,
-                    transactionId: transactionId || 'N/A',
-                    date: new Date().toLocaleDateString(),
+                    userId: user.email,
+                    password: isFirstTimeUser ? generatedPassword : '',
                     planName: plan.name,
-                    amount: finalAmount,
+                    transactionId: transactionId || 'N/A',
+                    amount: totalAmount,
                     currency: 'USD',
-                    userId: isFirstTimeUser ? user.email : undefined,
-                    password: isFirstTimeUser ? generatedPassword : undefined
+                    planUrl
                 })
             });
 

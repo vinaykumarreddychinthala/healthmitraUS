@@ -24,10 +24,11 @@ interface QuickStatsProps {
     members?: MembersData;
     reimbursement?: ReimbursementData;
     loading?: boolean;
+    selectedPlanId?: string | null;
 }
 
 export function QuickStats({
-    plans = [], eCard, wallet, pending, vouchers, services, members, reimbursement, loading
+    plans = [], eCard, wallet, pending, vouchers, services, members, reimbursement, loading, selectedPlanId
 }: QuickStatsProps) {
     const totalCoverage = plans.reduce((sum, p) => sum + (p.coverageAmount || 0), 0);
     const maxDaysRemaining = plans.length > 0 ? Math.max(...plans.map(p => p.daysRemaining || 0)) : 0;
@@ -36,6 +37,36 @@ export function QuickStats({
         const currentDate = new Date(current.validUntil).getTime();
         return currentDate > prevDate ? current : prev;
     }) : null;
+
+    const actualPlanId = selectedPlanId && plans.length > 0 ? plans[0].planId : null;
+
+    const displayMembers = members ? {
+        totalMembers: actualPlanId 
+            ? members.familyMembers.filter(m => m.planId === actualPlanId).length
+            : members.totalMembers,
+        withActiveCards: actualPlanId
+            ? members.familyMembers.filter(m => m.planId === actualPlanId && m.status === 'active').length
+            : members.withActiveCards,
+    } : { totalMembers: 0, withActiveCards: 0 };
+
+    const displayECard = eCard ? {
+        totalCards: displayMembers.totalMembers,
+        status: displayMembers.withActiveCards > 0 ? 'active' as const : 'pending' as const,
+    } : { totalCards: 0, status: 'pending' as const };
+
+    const displayPending = pending ? {
+        total: actualPlanId
+            ? (pending.byPlan?.[actualPlanId]?.total || 0)
+            : pending.total,
+        breakdown: {
+            serviceRequests: actualPlanId
+                ? (pending.byPlan?.[actualPlanId]?.serviceRequests || 0)
+                : pending.breakdown.serviceRequests,
+            reimbursements: actualPlanId
+                ? (pending.byPlan?.[actualPlanId]?.reimbursements || 0)
+                : pending.breakdown.reimbursements,
+        }
+    } : { total: 0, breakdown: { serviceRequests: 0, reimbursements: 0 } };
 
     if (loading) {
         return (
@@ -95,19 +126,19 @@ export function QuickStats({
                         <div className="mb-3 flex items-center justify-between">
                             <CreditCard className={cn(
                                 "h-10 w-10",
-                                eCard?.status === 'active' ? "text-emerald-600" : "text-amber-600"
+                                displayECard.status === 'active' ? "text-emerald-600" : "text-amber-600"
                             )} />
-                            <Badge variant={eCard?.status === 'active' ? "default" : "secondary"}
+                            <Badge variant={displayECard.status === 'active' ? "default" : "secondary"}
                                 className={cn(
-                                    eCard?.status === 'active' ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                                    displayECard.status === 'active' ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-amber-100 text-amber-700 hover:bg-amber-200"
                                 )}
                             >
-                                {eCard?.status === 'active' ? 'Active' : 'Pending'}
+                                {displayECard.status === 'active' ? 'Active' : 'Pending'}
                             </Badge>
                         </div>
                         <h3 className="font-semibold text-slate-700">E-Card Status</h3>
                         <p className="mt-1 text-sm text-slate-500">
-                            {eCard?.totalCards} cards issued
+                            {displayECard.totalCards} cards issued
                         </p>
                     </div>
                     <Button size="sm" className="mt-4 w-full sm:w-fit bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
@@ -146,15 +177,15 @@ export function QuickStats({
                         <h3 className="font-semibold text-slate-800">Pending Requests</h3>
                         <div className="mt-4">
                             <span className="text-3xl font-bold text-amber-600">
-                                {pending?.total || 0}
+                                {displayPending.total || 0}
                             </span>
                         </div>
                         <div className="mt-2 space-y-1">
                             <p className="text-xs text-slate-600">
-                                {pending?.breakdown.serviceRequests} Service Requests
+                                {displayPending.breakdown.serviceRequests} Service Requests
                             </p>
                             <p className="text-xs text-slate-600">
-                                {pending?.breakdown.reimbursements} Reimbursements
+                                {displayPending.breakdown.reimbursements} Reimbursements
                             </p>
                         </div>
                     </div>
@@ -172,8 +203,8 @@ export function QuickStats({
                         <Heart className="mb-3 h-10 w-10 text-rose-600" />
                         <h3 className="font-semibold text-slate-700">Total Coverage</h3>
                         <div className="mt-2 flex items-baseline gap-1">
-                            <span className="text-2xl font-bold text-rose-600">
-                                ${totalCoverage.toLocaleString("en-US")}
+                            <span className="text-xl font-bold text-rose-600">
+                                No-limit as per plan
                             </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-1">Health protection</p>
@@ -206,7 +237,7 @@ export function QuickStats({
                         <h3 className="font-semibold text-slate-700">Family</h3>
                         <div className="mt-2 flex items-baseline gap-2">
                             <span className="text-2xl font-bold text-sky-600">
-                                {members?.totalMembers || 0}
+                                {displayMembers.totalMembers || 0}
                             </span>
                             <span className="text-xs text-slate-500">members</span>
                         </div>
@@ -214,7 +245,7 @@ export function QuickStats({
                     <div className="mt-2 space-y-1">
                         <div className="flex justify-between text-xs">
                             <span className="text-slate-500">With E-Cards:</span>
-                            <span className="font-medium text-slate-700">{members?.withActiveCards || 0}</span>
+                            <span className="font-medium text-slate-700">{displayMembers.withActiveCards || 0}</span>
                         </div>
                     </div>
                     <div className="mt-2 text-xs font-medium text-sky-700 group-hover:underline">

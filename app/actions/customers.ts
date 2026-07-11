@@ -165,7 +165,8 @@ async function _assignPlan(
 
     const from = validFrom ? new Date(validFrom) : new Date();
     const till = new Date(from);
-    till.setDate(till.getDate() + (plan.duration_days || 365));
+    const planDurationDays = plan.duration_days || 365;
+    till.setDate(till.getDate() + Math.max(0, planDurationDays - 1));
 
     const memberIdCode = await generateMemberIdCode(adminSupabase);
     const cardUniqueId = generateCardUniqueId();

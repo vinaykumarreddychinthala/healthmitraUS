@@ -11,7 +11,6 @@ export default async function WalletPage() {
 
     if (!user) redirect("/login");
 
-    // Use server action to bypass RLS
     const { wallet, transactions } = await getWalletWithTransactions(user.id);
 
     const txs: any[] = transactions || [];
@@ -19,17 +18,29 @@ export default async function WalletPage() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
     const stats = {
-        totalCredited: txs.filter((t: any) => t.type === 'credit').reduce((a: number, t: any) => a + Number(t.amount), 0),
+        totalCredited: txs
+            .filter((t: any) => t.type === 'credit')
+            .reduce((a: number, t: any) => a + Number(t.amount), 0),
         creditedCount: txs.filter((t: any) => t.type === 'credit').length,
-        totalDebited: txs.filter((t: any) => t.type === 'debit').reduce((a: number, t: any) => a + Number(t.amount), 0),
+        totalDebited: txs
+            .filter((t: any) => t.type === 'debit')
+            .reduce((a: number, t: any) => a + Number(t.amount), 0),
         debitedCount: txs.filter((t: any) => t.type === 'debit').length,
-        thisMonthSpend: txs.filter((t: any) => t.type === 'debit' && t.created_at >= startOfMonth).reduce((a: number, t: any) => a + Number(t.amount), 0),
-        thisMonthCount: txs.filter((t: any) => t.type === 'debit' && t.created_at >= startOfMonth).length
+        thisMonthSpend: txs
+            .filter((t: any) => t.type === 'debit' && (t.created_at || t.transaction_date) >= startOfMonth)
+            .reduce((a: number, t: any) => a + Number(t.amount), 0),
+        thisMonthCount: txs
+            .filter((t: any) => t.type === 'debit' && (t.created_at || t.transaction_date) >= startOfMonth)
+            .length,
     };
 
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
 
-    // Check KYC Status for withdrawal eligibility
+    // Check KYC status for withdrawal eligibility
     const today = new Date().toISOString().split('T')[0];
     const { data: members } = await supabase
         .from('ecard_members')
@@ -48,16 +59,18 @@ export default async function WalletPage() {
             .in('member_id', memberIds);
 
         const verifiedCount = (kycRecords || []).filter((k: any) => k.admin_verified).length;
-        // All members must have completed and verified KYC to withdraw
         if (verifiedCount === members.length) {
             canWithdraw = true;
         }
     }
 
-    return <WalletView 
-        wallet={wallet || { id: '', balance: 0, currency: 'USD', status: 'inactive' }} 
-        stats={stats} 
-        userName={profile?.full_name || ''}
-        canWithdraw={canWithdraw}
-    />;
+    return (
+        <WalletView
+            wallet={wallet || { id: '', balance: 0, added_money: 0, currency: 'USD', status: 'active' }}
+            stats={stats}
+            transactions={txs}
+            userName={profile?.full_name || ''}
+            canWithdraw={canWithdraw}
+        />
+    );
 }

@@ -36,14 +36,16 @@ export async function getPHRStats() {
 }
 
 export async function getPHRDocuments() {
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
+    const adminClient = await createAdminClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return { success: false, error: 'Not authenticated' };
 
-    const { data, error } = await supabase.from('phr_documents')
+    const { data, error } = await adminClient.from('phr_documents')
         .select('*')
         .eq('user_id', user.id)
+        .not('category', 'in', '("aadhaar","pan","bank")')
         .order('created_at', { ascending: false });
 
     if (error) return { success: false, error: error.message };
@@ -68,13 +70,14 @@ export async function uploadPHRDocument(formData: any) {
     // For simplicity given the scope, we'll assume metadata insertion.
     // Real implementation would require Supabase Storage handling.
 
-    const supabase = await createAdminClient();
+    const supabase = await createClient();
+    const adminClient = await createAdminClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: 'Not authenticated' };
 
     const { name, category, file_url } = formData;
 
-    const { data, error } = await supabase.from('phr_documents').insert({
+    const { data, error } = await adminClient.from('phr_documents').insert({
         user_id: user.id,
         name,
         category,

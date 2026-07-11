@@ -604,7 +604,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                                     <h3 className="font-bold text-slate-900 text-lg leading-tight">{plan.name}</h3>
                                                     <div className="flex flex-wrap items-center gap-2 mt-1">
                                                         <Badge variant="outline" className="text-xs border-primary/30 text-primary">{plan.duration_days} days</Badge>
-                                                        {!!plan.coverage_amount && Number(plan.coverage_amount) > 0 && <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50">{currency}{Number(coverageAmountInCurrency).toLocaleString()} cover</Badge>}
+                                                        {!!plan.coverage_amount && Number(plan.coverage_amount) > 0 && <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50">No-limit as per plan</Badge>}
                                                     </div>
                                                 </div>
                                             </div>
@@ -618,10 +618,10 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                             onClick={() => setIsPlanDetailsOpen(!isPlanDetailsOpen)}
                                             className="mt-3 flex items-center justify-between w-full text-sm font-semibold text-slate-700 hover:text-primary transition-colors"
                                         >
-                                            <span>View Plan Details</span>
+                                            {/* <span>View Plan Details</span>
                                             <svg className={`w-4 h-4 transition-transform ${isPlanDetailsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
+                                            </svg> */}
                                         </button>
 
                                         {/* Collapsible Description points */}

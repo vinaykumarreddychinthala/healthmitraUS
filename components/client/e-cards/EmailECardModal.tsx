@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Mail, Loader2 } from 'lucide-react';
+import { X, Mail, Loader2, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { ECardMember } from '@/types/ecard';
-import { buildCardEmailHTML } from '@/lib/cardDrawer';
+import { buildCardEmailHTML, drawFrontToCanvas, drawBackToCanvas } from '@/lib/cardDrawer';
 
 interface EmailECardModalProps {
     isOpen: boolean;
@@ -14,12 +14,57 @@ interface EmailECardModalProps {
 }
 
 export default function EmailECardModal({ isOpen, onClose, cardName, card }: EmailECardModalProps) {
-    const [email, setEmail] = useState('');
+    const [email, setEmail] = useState(card.email || '');
     const [altEmail, setAltEmail] = useState('');
     const [sendToAlt, setSendToAlt] = useState(false);
     const [isSending, setIsSending] = useState(false);
 
     if (!isOpen) return null;
+
+    const buildCardImageBase64 = async (): Promise<string | null> => {
+        try {
+            const cardData = {
+                name: card.name,
+                memberId: card.memberId,
+                cardUniqueId: card.cardUniqueId,
+                relation: card.relation,
+                dob: card.dob,
+                age: card.age,
+                gender: card.gender,
+                bloodGroup: card.bloodGroup || '',
+                planName: card.planName,
+                coverageAmount: card.coverageAmount ?? 0,
+                validFrom: card.validFrom,
+                validTill: card.validTill,
+                emergencyContact: card.emergencyContact || '9818823106',
+                adminVerified: card.adminVerified ?? false,
+                photoUrl: card.photoUrl,
+            };
+
+            const [frontCanvas, backCanvas] = await Promise.all([
+                drawFrontToCanvas(cardData),
+                drawBackToCanvas(cardData),
+            ]);
+
+            // Combine front + back into a single tall image
+            const GAP = 30;
+            const combined = document.createElement('canvas');
+            combined.width = frontCanvas.width;
+            combined.height = frontCanvas.height + backCanvas.height + GAP * 2;
+
+            const ctx = combined.getContext('2d')!;
+            ctx.fillStyle = '#f1f5f9';
+            ctx.fillRect(0, 0, combined.width, combined.height);
+            ctx.drawImage(frontCanvas, 0, GAP);
+            ctx.drawImage(backCanvas, 0, frontCanvas.height + GAP * 2);
+
+            // Return base64 PNG (strip the data: prefix for transport)
+            return combined.toDataURL('image/png', 1.0).split(',')[1];
+        } catch (err) {
+            console.error('Failed to render card to image:', err);
+            return null;
+        }
+    };
 
     const handleSend = async () => {
         const targets = [email.trim(), sendToAlt ? altEmail.trim() : ''].filter(Boolean);
@@ -39,7 +84,6 @@ export default function EmailECardModal({ isOpen, onClose, cardName, card }: Ema
         setIsSending(true);
 
         try {
-            // Build a beautiful HTML card for the email
             const cardData = {
                 name: card.name,
                 memberId: card.memberId,
@@ -53,16 +97,17 @@ export default function EmailECardModal({ isOpen, onClose, cardName, card }: Ema
                 coverageAmount: card.coverageAmount ?? 0,
                 validFrom: card.validFrom,
                 validTill: card.validTill,
-                emergencyContact: card.emergencyContact || '1800-XXX-XXXX',
+                emergencyContact: card.emergencyContact || '9818823106',
                 adminVerified: card.adminVerified ?? false,
                 photoUrl: card.photoUrl,
             };
 
+            // Build the HTML email body
             const htmlContent = buildCardEmailHTML(cardData);
 
-            // Send email via the existing /api/contact route or download route
-            // We'll use the /api/download route to get the HTML, then trigger a mailto
-            // For a real implementation, hit a dedicated /api/email-card endpoint
+            // Render card as downloadable PNG attachment
+            const cardImageBase64 = await buildCardImageBase64();
+
             const res = await fetch('/api/email-ecard', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -70,13 +115,15 @@ export default function EmailECardModal({ isOpen, onClose, cardName, card }: Ema
                     recipients: targets,
                     cardName: card.name,
                     htmlContent,
-                    memberId: card.memberId,
+                    memberId: card.id,
+                    cardImageBase64,
+                    cardFilename: `HealthMitra_Card_${card.name.replace(/\s+/g, '_')}.png`,
                 }),
             });
 
             if (res.ok) {
                 toast.success('E-Card sent successfully!', {
-                    description: `Sent to: ${targets.join(', ')}`,
+                    description: `Sent to: ${targets.join(', ')} — they can download it directly from the email.`,
                 });
                 onClose();
             } else {
@@ -84,18 +131,17 @@ export default function EmailECardModal({ isOpen, onClose, cardName, card }: Ema
                 throw new Error(data?.error || 'Failed to send email.');
             }
         } catch (err: any) {
-            // Fallback: open mailto with the email addresses
+            // Fallback: open mailto
             console.warn('Email API failed, falling back to mailto:', err);
-            const mailtoLink = `mailto:${targets.join(',')}?subject=${encodeURIComponent(`HealthMitra E-Card – ${card.name}`)}&body=${encodeURIComponent(`Please find attached your HealthMitra E-Card for ${card.name}.\n\nCard ID: ${card.cardUniqueId}\nPlan: ${card.planName}\nValid From: ${card.validFrom}\nValid Till: ${card.validTill}\n\nFor support, contact us at support@healthmitra.com`)}`;
+            const mailtoLink = `mailto:${targets.join(',')}?subject=${encodeURIComponent(`HealthMitra E-Card – ${card.name}`)}&body=${encodeURIComponent(`Please find your HealthMitra E-Card for ${card.name}.\n\nCard ID: ${card.cardUniqueId}\nPlan: ${card.planName}\nValid From: ${card.validFrom}\nValid Till: ${card.validTill}\n\nFor support, contact us at service@healthmitraus.com`)}`;
             window.open(mailtoLink);
-            toast.info('Opened your email client with card details.', {
-                description: 'For automated sending, please configure the email API.',
-            });
+            toast.info('Opened your email client with card details.');
             onClose();
         } finally {
             setIsSending(false);
         }
     };
+
 
     return (
         <div
@@ -121,7 +167,7 @@ export default function EmailECardModal({ isOpen, onClose, cardName, card }: Ema
 
                 <div className="p-6 space-y-5">
                     <p className="text-sm text-slate-600">
-                        We'll send a beautifully formatted HTML version of <strong>{cardName}</strong>'s E-Card to the email(s) below.
+                        We'll send <strong>{cardName}</strong>'s E-Card to the email(s) below as a <strong>downloadable PNG image</strong> attachment.
                     </p>
 
                     {/* Primary email */}
@@ -167,8 +213,9 @@ export default function EmailECardModal({ isOpen, onClose, cardName, card }: Ema
                     </div>
 
                     {/* Info box */}
-                    <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 text-xs text-teal-700">
-                        <strong>📧 What will be sent:</strong> A fully formatted HTML e-card with member details, plan info, validity dates, and emergency contacts.
+                    <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 text-xs text-teal-700 space-y-1">
+                        <p><strong>📎 Attachment:</strong> A high-resolution PNG image of the card (front + back) will be attached — the customer can download and print it.</p>
+                        <p><strong>📧 Email body:</strong> A formatted HTML view of the card is also included for quick reference.</p>
                     </div>
                 </div>
 
@@ -185,7 +232,7 @@ export default function EmailECardModal({ isOpen, onClose, cardName, card }: Ema
                         className="px-5 py-2 text-sm font-semibold bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors shadow-md shadow-teal-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isSending ? (
-                            <><Loader2 size={15} className="animate-spin" /> Sending...</>
+                            <><Loader2 size={15} className="animate-spin" /> Generating & Sending...</>
                         ) : (
                             <><Mail size={15} /> Send E-Card</>
                         )}

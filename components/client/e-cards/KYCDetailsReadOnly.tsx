@@ -116,6 +116,17 @@ export default function KYCDetailsReadOnly({
                                     View Doc <ExternalLink className="w-3 h-3" />
                                 </a>
                             )}
+                            {kycData.aadhaar_signature_url && kycData.aadhaar_declaration && (
+                                <a
+                                    href={kycData.aadhaar_signature_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-xs text-teal-600 hover:underline flex-col"
+                                >
+                                    <img src={kycData.aadhaar_signature_url} alt="Signature" className="h-6 w-auto mix-blend-multiply bg-transparent" />
+                                    <span>View <ExternalLink className="w-3 h-3 inline" /></span>
+                                </a>
+                            )}
                         </div>
 
                         {/* PAN */}
@@ -141,6 +152,17 @@ export default function KYCDetailsReadOnly({
                                     className="flex items-center gap-1 text-xs text-teal-600 hover:underline"
                                 >
                                     View Doc <ExternalLink className="w-3 h-3" />
+                                </a>
+                            )}
+                            {kycData.pan_signature_url && kycData.pan_declaration && (
+                                <a
+                                    href={kycData.pan_signature_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-xs text-teal-600 hover:underline flex-col"
+                                >
+                                    <img src={kycData.pan_signature_url} alt="Signature" className="h-6 w-auto mix-blend-multiply bg-transparent" />
+                                    <span>View <ExternalLink className="w-3 h-3 inline" /></span>
                                 </a>
                             )}
                         </div>

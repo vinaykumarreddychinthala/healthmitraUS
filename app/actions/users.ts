@@ -469,7 +469,7 @@ export async function activateNewPlan(id: string, planId: string) {
     const validFrom = new Date();
     const durationDays = plan?.duration_days || 365;
     const validTill = new Date(validFrom);
-    validTill.setDate(validTill.getDate() + durationDays);
+    validTill.setDate(validTill.getDate() + Math.max(0, durationDays - 1));
 
     // Generate member ID
     const memberIdCode = `HM-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}`;

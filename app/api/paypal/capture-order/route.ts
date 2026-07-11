@@ -162,7 +162,8 @@ export async function POST(request: Request) {
         // Create membership — use admin client
         const startDate = new Date();
         const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + (plan.duration_days || 365));
+        const planDurationDays = plan.duration_days || 365;
+        expiryDate.setDate(expiryDate.getDate() + Math.max(0, planDurationDays - 1));
 
         // Check if first time user (no existing memberships)
         const { data: existingMembers } = await adminClient
@@ -276,13 +277,20 @@ export async function POST(request: Request) {
         });
 
         // Create invoice — use admin client
-        const gstAmount = 0;
+        let baseAmount = finalAmount;
+        let gstAmount = 0;
+        // PayPal is typically USD, so GST is 0, but maintaining logic just in case
+        if (false) { // Set to true if PayPal ever takes INR with GST
+            baseAmount = Number((finalAmount / 1.18).toFixed(2));
+            gstAmount = Number((finalAmount - baseAmount).toFixed(2));
+        }
+
         await adminClient.from('invoices').insert({
             user_id: user.id,
             plan_id: planId,
             invoice_number: `INV-${Date.now()}${crypto.randomUUID().replace(/-/g,'').slice(0,6).toUpperCase()}`,
             plan_name: plan.name,
-            amount: finalAmount,
+            amount: baseAmount,
             gst: gstAmount,
             total: finalAmount,
             payment_method: 'paypal',

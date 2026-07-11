@@ -19,6 +19,24 @@ import {
 
 // --- CLIENT ACTIONS ---
 
+export async function getCustomerProfile() {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { success: false, error: 'Not authenticated' };
+
+    const { data, error } = await supabase.from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+    if (error && error.code !== 'PGRST116') {
+        return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+}
+
 export async function getServiceRequests() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

@@ -117,7 +117,7 @@ export async function fetchDashboardData(): Promise<
 
     const planGroups = new Map<string, any>();
     activeAndPendingMembers.forEach((member: any) => {
-        const key = member.card_unique_id || (member.plan_id + "_" + (member.valid_from || member.id));
+        const key = member.plan_id + "_" + (member.valid_from || member.id);
         if (!planGroups.has(key)) {
             planGroups.set(key, member);
         } else {
@@ -249,12 +249,34 @@ export async function fetchDashboardData(): Promise<
     };
 
     // Count pending items
-    const pendingRequests = (requestsRes.data || []).filter(
+    const pendingReqsList = (requestsRes.data || []).filter(
       (r: any) => r.status === "pending",
-    ).length;
-    const pendingClaims = allClaims.filter(
+    );
+    const pendingClaimsList = allClaims.filter(
       (c: any) => c.status === "pending",
-    ).length;
+    );
+    const pendingRequests = pendingReqsList.length;
+    const pendingClaims = pendingClaimsList.length;
+
+    const requestsByPlan: Record<string, { total: number; serviceRequests: number; reimbursements: number }> = {};
+    
+    pendingReqsList.forEach((r: any) => {
+        const pId = r.details?.plan_id;
+        if (pId) {
+            if (!requestsByPlan[pId]) requestsByPlan[pId] = { total: 0, serviceRequests: 0, reimbursements: 0 };
+            requestsByPlan[pId].serviceRequests += 1;
+            requestsByPlan[pId].total += 1;
+        }
+    });
+
+    pendingClaimsList.forEach((c: any) => {
+        const pId = c.plan_id;
+        if (pId) {
+            if (!requestsByPlan[pId]) requestsByPlan[pId] = { total: 0, serviceRequests: 0, reimbursements: 0 };
+            requestsByPlan[pId].reimbursements += 1;
+            requestsByPlan[pId].total += 1;
+        }
+    });
 
     return {
       success: true,
@@ -297,6 +319,8 @@ export async function fetchDashboardData(): Promise<
           familyMembers: members.map((m: any) => ({
             name: m.full_name || "Unknown",
             relation: m.relation || "Self",
+            planId: m.plan_id || m.id,
+            status: m.status
           })),
         },
         reimbursementSummary,
@@ -306,6 +330,7 @@ export async function fetchDashboardData(): Promise<
             serviceRequests: pendingRequests,
             reimbursements: pendingClaims,
           },
+          byPlan: requestsByPlan,
         },
         recentActivity,
         notifications: (notifsRes.data || []).map((n: any) => ({

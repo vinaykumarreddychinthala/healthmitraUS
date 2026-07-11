@@ -22,7 +22,9 @@ export async function POST(request: Request) {
         const panDeclaration    = formData.get('panDeclaration') === 'true';
         const photoFile         = formData.get('photo') as File | null;
         const aadhaarFile       = formData.get('aadhaarFile') as File | null;
+        const aadhaarSignatureBase64 = formData.get('aadhaarSignatureBase64') as string | null;
         const panFile           = formData.get('panFile') as File | null;
+        const panSignatureBase64 = formData.get('panSignatureBase64') as string | null;
 
         // --- Validations ---
         // bloodGroup is optional; all other personal fields are required
@@ -121,11 +123,37 @@ export async function POST(request: Request) {
         };
 
         let aadhaarUpload = { url: null as string | null, path: null as string | null };
+        let aadhaarSignatureUpload = { url: null as string | null, path: null as string | null };
         let panUpload = { url: null as string | null, path: null as string | null };
+        let panSignatureUpload = { url: null as string | null, path: null as string | null };
 
         try {
-            if (aadhaarFile && !aadhaarDeclaration) aadhaarUpload = await uploadDoc(aadhaarFile, 'aadhaar');
-            if (panFile && !panDeclaration) panUpload = await uploadDoc(panFile, 'pan');
+            if (aadhaarFile && !aadhaarDeclaration) {
+                aadhaarUpload = await uploadDoc(aadhaarFile, 'aadhaar');
+            }
+            if (aadhaarDeclaration && aadhaarSignatureBase64) {
+                const matches = aadhaarSignatureBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+                if (matches && matches.length === 3) {
+                    const type = matches[1];
+                    const buffer = Buffer.from(matches[2], 'base64');
+                    // Create a File-like object to satisfy uploadDoc which expects type property
+                    const sigFile = new File([buffer], `signature.png`, { type });
+                    aadhaarSignatureUpload = await uploadDoc(sigFile, 'aadhaar_signature');
+                }
+            }
+            if (panFile && !panDeclaration) {
+                panUpload = await uploadDoc(panFile, 'pan');
+            }
+            if (panDeclaration && panSignatureBase64) {
+                const matches = panSignatureBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+                if (matches && matches.length === 3) {
+                    const type = matches[1];
+                    const buffer = Buffer.from(matches[2], 'base64');
+                    // Create a File-like object to satisfy uploadDoc which expects type property
+                    const sigFile = new File([buffer], `signature.png`, { type });
+                    panSignatureUpload = await uploadDoc(sigFile, 'pan_signature');
+                }
+            }
         } catch (uploadErr: any) {
             return NextResponse.json({ success: false, error: uploadErr.message }, { status: 500 });
         }
@@ -142,10 +170,14 @@ export async function POST(request: Request) {
             aadhaar_declaration: aadhaarDeclaration,
             aadhaar_file_url: aadhaarUpload.url,
             aadhaar_file_path: aadhaarUpload.path,
+            aadhaar_signature_url: aadhaarSignatureUpload.url,
+            aadhaar_signature_path: aadhaarSignatureUpload.path,
             pan_number: panDeclaration ? null : panNumber?.toUpperCase() || null,
             pan_declaration: panDeclaration,
             pan_file_url: panUpload.url,
             pan_file_path: panUpload.path,
+            pan_signature_url: panSignatureUpload.url,
+            pan_signature_path: panSignatureUpload.path,
             photo_url: publicUrl,
             photo_path: photoPath,
             kyc_submitted: true,

@@ -173,7 +173,7 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                             </Badge>
                                             {index === 0 && (
                                                 <Badge className="bg-teal-100 text-teal-700 border-teal-200">
-                                                    ⭐ Current Plan
+                                                     Current Plan
                                                 </Badge>
                                             )}
                                         </div>
@@ -198,7 +198,7 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                                 Members: <strong className="text-slate-800 ml-0.5">{purchase.members_count ?? 1}</strong>/<strong className="text-slate-800">{purchase.max_members ?? 1}</strong>
                                             </span>
                                             <span className="flex items-center gap-1.5 text-sm font-semibold text-teal-700">
-                                                Coverage: No Limit
+                                                Coverage: No-limit as per plan
                                             </span>
                                         </div>
                                         {/* Badges row */}
@@ -299,7 +299,7 @@ export function MyPurchasesView({ purchases }: MyPurchasesViewProps) {
                                                 Members: {purchase.members_count ?? 1}/{purchase.max_members ?? 1}
                                             </span>
                                             <span>
-                                                Coverage: As per plan benefit
+                                                Coverage: No-limit as per plan
                                             </span>
                                         </div>
                                     </div>
