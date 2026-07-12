@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -438,10 +437,20 @@ export default function ServiceRequestsPage() {
                           {req.request_id_display || req.id.slice(0, 8)}
                         </span>
                       </p>
+                      {(req.details?.patientName || req.details?.voucherMember || req.details?.policy_holder_name) && (
+                        <p className="text-xs text-slate-500 mb-2">
+                          Customer:{" "}
+                          <span className="text-slate-700 font-medium">
+                            {req.details.patientName || req.details.voucherMember || req.details.policy_holder_name}
+                          </span>
+                        </p>
+                      )}
                       <p className="text-sm text-slate-600 mb-2">
                         {req.description ||
                           req.details?.description ||
                           req.details?.subject ||
+                          req.details?.medicalIssue ||
+                          req.details?.voucherType ||
                           "No description"}
                       </p>
 

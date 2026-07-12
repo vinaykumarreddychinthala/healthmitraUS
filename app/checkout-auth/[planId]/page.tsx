@@ -208,10 +208,10 @@ export default function CheckoutAuthPage({ params }: { params: Promise<{ planId:
                                             value={formData.phone.substring(formData.phone.indexOf(' ') + 1)}
                                             onChange={(e) => {
                                                 const code = formData.phone.split(' ')[0] || '+1';
-                                                const nums = e.target.value.replace(/[^0-9]/g, '');
+                                                const nums = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
                                                 setFormData({ ...formData, phone: code + ' ' + nums });
                                             }}
-                                            maxLength={15}
+                                            maxLength={10}
                                             required
                                             className="h-11 flex-1"
                                         />

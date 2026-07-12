@@ -428,6 +428,13 @@ const formSchema = z.object({
   // Vaccination-specific extra
   vaccinationFees: z.string().optional(),
   vaccinationDiscount: z.string().optional(),
+  // Voucher-specific
+  voucherType: z.string().optional(),
+  voucherMember: z.string().optional(),
+  voucherAge: z.string().optional(),
+  voucherMobile: z.string().optional(),
+  voucherAddress: z.string().optional(),
+  voucherDetails: z.string().optional(),
 }).superRefine((data, ctx) => {
   const requireField = (field: keyof typeof data, message: string) => {
     const value = data[field];
@@ -548,6 +555,18 @@ const formSchema = z.object({
       requireField('testBillFile', 'Bill upload is required');
       requireField('testReportsFile', 'Reports upload is required');
     }
+  } else if (data.type === 'voucher') {
+    requireField('voucherType', 'Voucher type is required');
+    requireField('voucherMember', 'Member is required');
+    requireField('voucherAge', 'Age is required');
+    requireField('voucherMobile', 'Mobile number is required');
+    requireField('voucherAddress', 'Address is required');
+  } else if (data.type === 'emergency') {
+    requireField('patientName', 'Name is required');
+    requireField('patientAge', 'Age is required');
+    requireField('patientPhone', 'Phone number is required');
+    requireField('address', 'Address is required');
+    requireField('description', 'Reason for emergency is required');
   }
 });
 
@@ -1030,7 +1049,7 @@ export function ServiceRequestForm({
                     <Input
                       {...form.register("patientPhone", {
                         onChange: (e) => {
-                          e.target.value = e.target.value.replace(/\D/g, "");
+                          e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
                         }
                       })}
                       placeholder="Contact Number *"
@@ -1200,7 +1219,7 @@ export function ServiceRequestForm({
                   <Input
                     {...form.register("patientPhoneNumber", {
                       onChange: (e) => {
-                        e.target.value = e.target.value.replace(/\D/g, "");
+                        e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
                       }
                     })}
                     placeholder="Contact Number (Only Numbers) *"
@@ -1545,7 +1564,7 @@ export function ServiceRequestForm({
                       <Label>POC Phone Number <span className="text-red-500">*</span></Label>
                       <Input {...form.register("pocPhone", {
                           onChange: (e) => {
-                            e.target.value = e.target.value.replace(/\D/g, "");
+                            e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
                           }
                         })} type="tel" maxLength={10} placeholder="Your answer" />
                     </div>
@@ -1933,7 +1952,7 @@ export function ServiceRequestForm({
                     
                     <div className="space-y-2">
                       <Label className="text-sm font-bold text-slate-900">Contact of Pharmacy *</Label>
-                      <Input {...form.register("pharmacyContact")} type="tel" maxLength={10} className="h-11 bg-white" />
+                      <Input {...form.register("pharmacyContact", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10); } })} type="tel" maxLength={10} className="h-11 bg-white" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm font-bold text-slate-900">Fees Paid at Pharmacy *</Label>
@@ -1981,7 +2000,7 @@ export function ServiceRequestForm({
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm font-bold text-slate-900">Contact of Doctor/Hospital/Clinic/Dentist/Cosmetic *</Label>
-                      <Input {...form.register("doctorContact", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, ""); } })} type="tel" maxLength={10} className="h-11 bg-white" />
+                      <Input {...form.register("doctorContact", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10); } })} type="tel" maxLength={10} className="h-11 bg-white" />
                     </div>
 
                     <div className="space-y-2">
@@ -2029,7 +2048,7 @@ export function ServiceRequestForm({
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm font-bold text-slate-900">Contact of Doctor/Hospital/Clinic *</Label>
-                      <Input {...form.register("doctorContact", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, ""); } })} type="tel" maxLength={10} className="h-11 bg-white" />
+                      <Input {...form.register("doctorContact", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10); } })} type="tel" maxLength={10} className="h-11 bg-white" />
                     </div>
 
                     <div className="space-y-2">
@@ -2078,7 +2097,7 @@ export function ServiceRequestForm({
 
                     <div className="space-y-2">
                       <Label className="text-sm font-bold text-slate-900">Contact of Test Centre *</Label>
-                      <Input {...form.register("testCentreContact")} type="tel" maxLength={10} className="h-11 bg-white" />
+                      <Input {...form.register("testCentreContact", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10); } })} type="tel" maxLength={10} className="h-11 bg-white" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-sm font-bold text-slate-900">Fees Paid at Test Centre *</Label>
@@ -2109,6 +2128,85 @@ export function ServiceRequestForm({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ===== REDEEM VOUCHER ===== */}
+            {watchType === "voucher" && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 pt-2">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-slate-900">Voucher Type *</Label>
+                    <Select onValueChange={(val) => form.setValue("voucherType", val)}>
+                      <SelectTrigger className="bg-white h-11">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="health_checkup">Health Checkup</SelectItem>
+                        <SelectItem value="health">Health</SelectItem>
+                        <SelectItem value="dental">Dental</SelectItem>
+                        <SelectItem value="eye">Eye</SelectItem>
+                        <SelectItem value="consultation">Consultation</SelectItem>
+                        <SelectItem value="pharmacy">Pharmacy</SelectItem>
+                        <SelectItem value="diagnostic">Diagnostic</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-slate-900">Member *</Label>
+                    <Input {...form.register("voucherMember")} placeholder="Select or Enter member name" className="h-11 bg-white" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-slate-900">Age *</Label>
+                    <Input {...form.register("voucherAge")} type="number" placeholder="Age" className="h-11 bg-white" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-slate-900">Mobile No. *</Label>
+                    <Input {...form.register("voucherMobile", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10); } })} type="tel" maxLength={10} placeholder="Mobile No." className="h-11 bg-white" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-900">Address *</Label>
+                  <Textarea {...form.register("voucherAddress")} placeholder="Address" rows={3} className="resize-none bg-white w-full" />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-900">Additional Detail</Label>
+                  <Textarea {...form.register("voucherDetails")} placeholder="Additional Details" rows={3} className="resize-none bg-white w-full" />
+                </div>
+              </div>
+            )}
+
+            {/* ===== EMERGENCY REQUEST ===== */}
+            {watchType === "emergency" && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 pt-2">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-slate-900">Name *</Label>
+                    <Input {...form.register("patientName")} placeholder="Patient Name" className="h-11 bg-white" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-slate-900">Age *</Label>
+                    <Input {...form.register("patientAge")} type="number" placeholder="Age" className="h-11 bg-white" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold text-slate-900">Phone Number *</Label>
+                    <Input {...form.register("patientPhone", { onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10); } })} type="tel" maxLength={10} placeholder="Phone Number" className="h-11 bg-white" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-900">Address *</Label>
+                  <Textarea {...form.register("address")} placeholder="Complete Address" rows={3} className="resize-none bg-white w-full" />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold text-slate-900">Reason for Emergency *</Label>
+                  <Textarea {...form.register("description")} placeholder="Describe the emergency situation" rows={4} className="resize-none bg-white w-full" />
+                </div>
               </div>
             )}
 

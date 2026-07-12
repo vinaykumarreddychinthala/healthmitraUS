@@ -66,13 +66,25 @@ export async function POST(request: Request) {
 
         // Apply promo code if present
         let discount = 0;
-        let finalAmount = plan.price;
+        const originalPrice: number = plan.price;
+        let finalAmount: number = plan.price;
         if (promoCode) {
             const promoRes = await validatePromoCode(promoCode, plan.price);
             if (promoRes.success && promoRes.data) {
                 discount = promoRes.data.discount;
                 finalAmount = promoRes.data.finalPrice;
             }
+        }
+
+        // Compute GST breakdown (18% for Razorpay/INR, 0% otherwise)
+        let baseAmount: number;
+        let gstAmount: number;
+        if (paymentMethod === 'razorpay') {
+            baseAmount = Number((finalAmount / 1.18).toFixed(2));
+            gstAmount  = Number((finalAmount - baseAmount).toFixed(2));
+        } else {
+            baseAmount = finalAmount;
+            gstAmount  = 0;
         }
 
         // Determine transaction ID and status
@@ -227,6 +239,11 @@ export async function POST(request: Request) {
             card_unique_id: generatedUserId,
             policy_id: policyId,
             amount_paid: finalAmount,
+            base_amount: baseAmount,
+            discount_amount: discount,
+            gst_amount: gstAmount,
+            original_price: originalPrice,
+            promo_code: promoCode || null,
             currency: 'USD',
             payment_method: paymentMethod,
             transaction_id: transactionId,
@@ -268,23 +285,25 @@ export async function POST(request: Request) {
             razorpay_payment_id: transactionId,
             payment_method: paymentMethod || 'test',
             purpose: 'plan_purchase',
-            metadata: { promo_code: promoCode, discount: discount }
+            metadata: {
+                original_price: originalPrice,
+                base_amount: baseAmount,
+                discount_amount: discount,
+                gst_amount: gstAmount,
+                final_amount: finalAmount,
+                promo_code: promoCode || null,
+            }
         });
 
         // Create invoice record — use admin client
-        let baseAmount = finalAmount;
-        let gstAmount = 0;
-        if (paymentMethod === 'razorpay') {
-            baseAmount = Number((finalAmount / 1.18).toFixed(2));
-            gstAmount = Number((finalAmount - baseAmount).toFixed(2));
-        }
-        
         const { error: invoiceError } = await adminClient.from('invoices').insert({
             user_id: user.id,
             plan_id: planId,
             invoice_number: `INV-${Date.now()}${crypto.randomUUID().replace(/-/g,'').slice(0,6).toUpperCase()}`,
             plan_name: plan.name,
+            original_price: originalPrice,
             amount: baseAmount,
+            discount: discount,
             gst: gstAmount,
             total: finalAmount,
             payment_method: paymentMethod || 'test',
@@ -299,12 +318,13 @@ export async function POST(request: Request) {
         // Send confirmation email
         if (user.email) {
             const name = user.email.split('@')[0];
-            const gatewayName = paymentMethod === 'razorpay' ? 'Razorpay' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'stripe' ? 'Stripe' : 'EasePay';
             
             // Construct plan details page URL
             const domain = process.env.NEXT_PUBLIC_APP_URL || 'https://healthmitraus.com';
             const planUrl = plan.slug ? `${domain}/plans/${plan.slug}` : `${domain}/plans`;
+            const paymentDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
 
+            // Welcome email with account credentials
             await sendMail({
                 to: user.email,
                 subject: `Welcome to HealthMitra - Your ${plan.name} Membership Details`,
@@ -318,6 +338,27 @@ export async function POST(request: Request) {
                     amount: finalAmount,
                     currency: 'USD',
                     planUrl
+                })
+            });
+
+            // Detailed payment receipt email with full breakdown
+            await sendMail({
+                to: user.email,
+                subject: `Payment Receipt - ${plan.name} | HealthMitra`,
+                html: paymentReceiptTemplate({
+                    customerName: name,
+                    customerEmail: user.email,
+                    customerPhone: user.user_metadata?.phone || 'N/A',
+                    transactionId: transactionId || 'N/A',
+                    date: paymentDate,
+                    planName: plan.name,
+                    amount: finalAmount,
+                    basePrice: baseAmount,
+                    discount: discount > 0 ? discount.toFixed(2) : '0.00',
+                    tax: gstAmount > 0 ? gstAmount.toFixed(2) : '0.00',
+                    currency: paymentMethod === 'razorpay' ? 'INR' : 'USD',
+                    userId: user.email,
+                    password: isFirstTimeUser ? generatedPassword : '',
                 })
             });
 
@@ -344,7 +385,11 @@ export async function POST(request: Request) {
             data: {
                 membershipId: member.id,
                 planName: plan.name,
-                amount: plan.price,
+                originalPrice,
+                baseAmount,
+                discountAmount: discount,
+                gstAmount,
+                amount: finalAmount,
                 startDate: startDate.toISOString(),
                 expiryDate: expiryDate.toISOString(),
                 transactionId,

@@ -174,21 +174,23 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
         checkAuthAndLoad();
     }, [planId, router]);
 
-    const onPurchaseSuccess = (result: { success: boolean; data?: { planName?: string; amount?: number; transactionId?: string } }) => {
+    const onPurchaseSuccess = (result: { success: boolean; data?: { planName?: string; amount?: number; baseAmount?: number; discountAmount?: number; gstAmount?: number; originalPrice?: number; transactionId?: string } }) => {
         sessionStorage.removeItem('checkout_user');
         const d = result?.data || {};
         const indiaMode = countryMode === 'india';
         const receiptCurrency = indiaMode ? '₹' : '$';
 
-        const usdBase = plan?.price || 0;
-        const usdDisc = appliedCode?.discount || 0;
+        // Use exact figures from the server response — never recompute on the client
+        const serverBase     = d.baseAmount     ?? d.originalPrice ?? plan?.price ?? 0;
+        const serverDiscount = d.discountAmount ?? 0;
+        const serverGst      = d.gstAmount      ?? 0;
+        const serverTotal    = d.amount         ?? plan?.price ?? 0;
 
-        // Convert to display currency
-        const base = indiaMode ? Math.round(usdBase * exchangeRate) : usdBase;
-        const disc = indiaMode ? Math.round(usdDisc * exchangeRate) : usdDisc;
-        const baseNet = Math.max(0, base - disc);
-        const tax = indiaMode ? Math.round(baseNet * 0.18) : 0;
-        const computedTotal = baseNet + tax;
+        // Convert to display currency if India mode
+        const convBase     = indiaMode ? Math.round(serverBase     * exchangeRate) : serverBase;
+        const convDiscount = indiaMode ? Math.round(serverDiscount * exchangeRate) : serverDiscount;
+        const convGst      = indiaMode ? Math.round(serverGst      * exchangeRate) : serverGst;
+        const convTotal    = indiaMode ? Math.round(serverTotal     * exchangeRate) : serverTotal;
 
         setPurchaseSuccess({
             email: editEmail,
@@ -196,10 +198,10 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
             phone: editPhone,
             planName: d.planName || plan?.name || '',
             transactionId: d.transactionId || '',
-            amount: computedTotal,
-            basePrice: base,
-            discountAmt: disc,
-            taxAmount: tax,
+            amount: convTotal,
+            basePrice: convBase,
+            discountAmt: convDiscount,
+            taxAmount: convGst,
             paymentDate: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }),
             receiptCurrency,
         });
@@ -218,6 +220,10 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                 promoCode: appliedCode?.code,
                 referralCode: referralCode.trim() || undefined,
                 amount: total,
+                baseAmount: basePriceInCurrency,
+                discountAmount: discountInCurrency,
+                gstAmount,
+                originalPrice: isIndia ? Math.round(plan.price * exchangeRate) : plan.price,
                 currency: isIndia ? 'INR' : 'USD'
             }),
         });
@@ -802,7 +808,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs font-medium text-slate-500 flex items-center gap-1.5"><Phone className="w-3 h-3" /> Phone</label>
-                                            <Input value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="Phone number" type="tel" className="h-9 text-sm" />
+                                            <Input value={editPhone} onChange={e => setEditPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="Phone number (10 digits)" type="tel" maxLength={10} className="h-9 text-sm" />
                                         </div>
                                     </CardContent>
                                 </Card>

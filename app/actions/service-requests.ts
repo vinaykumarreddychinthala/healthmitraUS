@@ -158,6 +158,22 @@ export async function createServiceRequest(data: { type: string; memberId?: stri
                 htmlContent = requestReceivedMedicineTemplate({ customerName });
             } else if (data.type === 'caretaker' || data.type === 'nursing') {
                 htmlContent = requestReceivedCaretakerTemplate({ customerName });
+            } else if (data.type === 'ambulance' && data.details?.urgency === 'immediate') {
+                htmlContent = `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaea; border-radius: 8px; overflow: hidden;">
+                        <div style="background-color: #dc2626; padding: 20px; text-align: center;">
+                            <h2 style="color: white; margin: 0;">Emergency Ambulance Request</h2>
+                        </div>
+                        <div style="padding: 30px;">
+                            <p style="font-size: 16px; color: #333;">Dear ${customerName},</p>
+                            <p style="font-size: 16px; color: #333;">We have received your immediate emergency ambulance request (<strong>${finalRequestId}</strong>).</p>
+                            <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
+                                <p style="font-size: 18px; color: #b91c1c; margin: 0; font-weight: bold;">Kindly call back on 9818823106 immediately for fast dispatch.</p>
+                            </div>
+                            <p style="font-size: 14px; color: #666; margin-top: 30px;">Please use the number above to contact our emergency team.</p>
+                        </div>
+                    </div>
+                `;
             }
 
             await sendMail({

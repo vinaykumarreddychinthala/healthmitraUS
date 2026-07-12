@@ -60,8 +60,8 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
                                 <h3 className="font-semibold text-slate-700 mb-2">Service Details</h3>
                                 <div className="space-y-2 text-slate-600">
                                     <p><span className="text-slate-400">Request Date:</span> <br />{new Date(request.created_at).toLocaleString()}</p>
-                                    <p><span className="text-slate-400">Doctor/Provider:</span> <br />{details.doctorName}</p>
-                                    <p><span className="text-slate-400">Specialization:</span> <br />{details.specialization}</p>
+                                    <p><span className="text-slate-400">Doctor/Provider/Hospital:</span> <br />{details.doctorName || details.hospitalName || 'N/A'}</p>
+                                    <p><span className="text-slate-400">Specialization/Type:</span> <br />{details.specialization || details.department || details.voucherType || 'N/A'}</p>
                                 </div>
                             </div>
                             <div>
@@ -69,18 +69,18 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
                                 <div className="space-y-2 text-slate-600">
                                     <p><span className="text-slate-400">Date & Time:</span> <br />
                                         <span className="font-medium text-teal-700 flex items-center gap-1">
-                                            <Calendar className="h-3 w-3" /> {details.preferredDate} {details.preferredTime}
+                                            <Calendar className="h-3 w-3" /> {details.preferredDate || details.visitDate || 'N/A'} {details.preferredTime || details.appointmentTime || ''}
                                         </span>
                                     </p>
-                                    <p><span className="text-slate-400">Member:</span> <br />{details.memberName}</p>
+                                    <p><span className="text-slate-400">Member:</span> <br />{details.patientName || details.voucherMember || details.policy_holder_name || 'N/A'}</p>
                                 </div>
                             </div>
                         </div>
 
                         <div className="mt-6 pt-6 border-t border-slate-100">
-                            <h3 className="font-semibold text-slate-700 mb-2">Symptoms / Reason</h3>
+                            <h3 className="font-semibold text-slate-700 mb-2">Description / Details</h3>
                             <p className="text-slate-600 bg-slate-50 p-3 rounded-lg text-sm">
-                                {details.symptoms}
+                                {details.symptoms || details.medicalIssue || details.description || details.subject || details.voucherDetails || 'No additional details provided.'}
                             </p>
                         </div>
                     </div>

@@ -26,7 +26,7 @@ function generatePolicyId(): string {
 export async function POST(request: Request) {
     try {
         const adminClient = createAdminClient();
-        const { name, email, phone, planId, paymentMethod, transactionId, promoCode, referralCode, amount, currency } = await request.json();
+        const { name, email, phone, planId, paymentMethod, transactionId, promoCode, referralCode, amount, currency, baseAmount, discountAmount, gstAmount, originalPrice } = await request.json();
 
         if (!name || !email || !planId || !paymentMethod) {
             return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
@@ -50,12 +50,16 @@ export async function POST(request: Request) {
         // Fallback to USD base price if amount wasn't sent
         let finalAmount = amount !== undefined ? amount : plan.price;
         let finalCurrency = currency || 'USD';
-        let discount = 0;
         
-        if (promoCode) {
+        let dbBaseAmount = baseAmount !== undefined ? baseAmount : finalAmount;
+        let dbDiscountAmount = discountAmount || 0;
+        let dbGstAmount = gstAmount || 0;
+        let dbOriginalPrice = originalPrice !== undefined ? originalPrice : plan.price;
+        
+        if (promoCode && discountAmount === undefined) {
             const promoRes = await validatePromoCode(promoCode, plan.price);
             if (promoRes.success && promoRes.data) {
-                discount = promoRes.data.discount;
+                dbDiscountAmount = promoRes.data.discount;
                 // Don't override finalAmount here if amount was passed from frontend
                 if (amount === undefined) finalAmount = promoRes.data.finalPrice;
             }
@@ -198,6 +202,11 @@ export async function POST(request: Request) {
             card_unique_id: cardId,
             policy_id: policyId,
             amount_paid: finalAmount,
+            base_amount: dbBaseAmount,
+            discount_amount: dbDiscountAmount,
+            gst_amount: dbGstAmount,
+            original_price: dbOriginalPrice,
+            promo_code: promoCode || null,
             currency: finalCurrency,
             payment_method: paymentMethod,
             transaction_id: finalTransactionId,
@@ -223,24 +232,17 @@ export async function POST(request: Request) {
             razorpay_payment_id: finalTransactionId,
             payment_method: paymentMethod,
             purpose: 'plan_purchase',
-            metadata: { promo_code: promoCode, discount, referral_code: referralCode || null }
+            metadata: { promo_code: promoCode, discount: dbDiscountAmount, referral_code: referralCode || null }
         });
 
         // Create invoice
-        let baseAmount = finalAmount;
-        let gstAmount = 0;
-        if (paymentMethod === 'razorpay') {
-            baseAmount = Number((finalAmount / 1.18).toFixed(2));
-            gstAmount = Number((finalAmount - baseAmount).toFixed(2));
-        }
-
         await adminClient.from('invoices').insert({
             user_id: userId,
             plan_id: planId,
             invoice_number: `INV-${Date.now()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
             plan_name: plan.name,
-            amount: baseAmount,
-            gst: gstAmount,
+            amount: dbBaseAmount,
+            gst: dbGstAmount,
             total: finalAmount,
             payment_method: paymentMethod,
             transaction_id: finalTransactionId,
@@ -268,6 +270,28 @@ export async function POST(request: Request) {
                     amount: finalAmount,
                     currency: finalCurrency,
                     planUrl
+                })
+            });
+
+            // Detailed payment receipt email with full breakdown
+            await sendMail({
+                to: email,
+                subject: `Payment Receipt - ${plan.name} | HealthMitra`,
+                html: paymentReceiptTemplate({
+                    customerName: name,
+                    customerEmail: email,
+                    customerPhone: phone || 'N/A',
+                    transactionId: finalTransactionId || 'N/A',
+                    date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }),
+                    planName: plan.name,
+                    amount: finalAmount,
+                    basePrice: dbBaseAmount,
+                    discount: dbDiscountAmount > 0 ? dbDiscountAmount.toFixed(2) : '0.00',
+                    tax: dbGstAmount > 0 ? dbGstAmount.toFixed(2) : '0.00',
+                    currency: finalCurrency,
+                    userId: email,
+                    password: isFirstTimeUser ? generatedPassword : '',
+                    partnerName: gatewayName
                 })
             });
 

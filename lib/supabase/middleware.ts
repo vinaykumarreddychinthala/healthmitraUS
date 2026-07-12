@@ -5,11 +5,17 @@ export async function updateSession(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-pathname', request.nextUrl.pathname);
 
-  let supabaseResponse = NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
+  const contentType = request.headers.get('content-type') || '';
+  const isMultipart = contentType.includes('multipart/form-data');
+
+  // Next.js Bug Fix: Passing `request: { headers }` strips the boundary from multipart/form-data.
+  let supabaseResponse = NextResponse.next(
+    isMultipart ? undefined : {
+      request: {
+        headers: requestHeaders,
+      },
+    }
+  );
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,11 +27,13 @@ export async function updateSession(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({
-            request: {
-              headers: requestHeaders,
-            },
-          });
+          supabaseResponse = NextResponse.next(
+            isMultipart ? undefined : {
+              request: {
+                headers: requestHeaders,
+              },
+            }
+          );
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
