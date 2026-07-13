@@ -46,6 +46,7 @@ async function fetchDashboardDataClient(): Promise<{ success: boolean; data?: Da
             }
             return {
                 id: planData.id,
+                planId: planData.id,
                 name: planData.name,
                 status: member.status,
                 validUntil: member.valid_till,
