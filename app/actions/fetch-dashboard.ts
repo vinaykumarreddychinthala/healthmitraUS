@@ -217,7 +217,7 @@ export async function fetchDashboardData(): Promise<
         id: c.id,
         type: "reimbursement" as const,
         title: c.title || "Reimbursement",
-        description: `Amount: $${c.amount || 0}`,
+        description: `Amount: ${c.currency === 'INR' ? '₹' : '$'}${c.amount || 0}`,
         status: (c.status || "pending") as
           | "pending"
           | "completed"

@@ -153,7 +153,7 @@ export function QuickStats({
                         <h3 className="text-base font-medium text-slate-600">Wallet Balance</h3>
                         <div className="mt-1 flex items-baseline gap-1">
                             <span className="text-2xl font-bold text-emerald-600">
-                                $ {wallet?.balance ? wallet.balance.toLocaleString("en-US") : '0'}
+                                {wallet?.currency === 'INR' ? '₹' : '$'} {wallet?.balance ? wallet.balance.toLocaleString("en-US") : '0'}
                             </span>
                         </div>
                         <p className="text-xs text-slate-500">Available Balance</p>

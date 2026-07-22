@@ -193,6 +193,37 @@ export async function getMyPurchases() {
         ).length;
     }
 
+    // Fetch currency for each purchase from the customers table
+    const planIds = [...new Set(groupedPurchases.map((p: any) => p.plan_id).filter(Boolean))];
+    if (planIds.length > 0) {
+        const { data: customerRows } = await adminClient
+            .from('customers')
+            .select('plan_id, currency, amount_paid')
+            .eq('user_id', user.id)
+            .in('plan_id', planIds);
+
+        // Build lookup: plan_id → { currency, amount_paid } (most recent purchase)
+        const currencyMap = new Map<string, { currency: string; amount_paid: number }>();
+        if (customerRows) {
+            for (const c of customerRows) {
+                if (c.plan_id && !currencyMap.has(c.plan_id)) {
+                    currencyMap.set(c.plan_id, { currency: c.currency || 'USD', amount_paid: c.amount_paid || 0 });
+                }
+            }
+        }
+
+        for (const p of groupedPurchases) {
+            const info = currencyMap.get(p.plan_id);
+            p.currency = info?.currency || 'USD';
+            p.amount_paid = info?.amount_paid || p.price || 0;
+        }
+    } else {
+        for (const p of groupedPurchases) {
+            p.currency = 'USD';
+            p.amount_paid = p.price || 0;
+        }
+    }
+
     // Sort by creation date, newest first
     groupedPurchases.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -231,12 +262,26 @@ export async function getPurchaseDetail(id: string) {
         return { success: false, error: 'Unauthorized access' };
     }
 
+    // Fetch currency from customers table for this plan purchase
+    const { data: customerRow } = await adminClient
+        .from('customers')
+        .select('currency, amount_paid, base_amount, discount_amount, gst_amount')
+        .eq('user_id', user.id)
+        .eq('plan_id', data.plan_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+    const currency = customerRow?.currency || 'USD';
+
     return {
         success: true, data: {
             id: data.id,
             status: data.status,
             valid_until: data.valid_till,
             created_at: data.created_at,
+            currency,
+            amount_paid: customerRow?.amount_paid ?? data.plans?.price ?? 0,
             plans: {
                 name: data.plans?.name || 'Health Plan',
                 coverage_amount: data.plans?.coverage_amount || data.coverage_amount || 0,

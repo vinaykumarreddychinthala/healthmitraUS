@@ -1,11 +1,9 @@
 import React from 'react';
-import ClaimStatusTimeline from '@/components/client/reimbursements/ClaimStatusTimeline';
-import { ChevronLeft, FileText } from 'lucide-react';
+import { ChevronLeft, FileText, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
-import DownloadDocsButton from "@/components/client/reimbursements/DownloadDocsButton";
 
 const getStatusStyle = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -30,13 +28,6 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
         .single();
 
     if (!claim) notFound();
-
-    // Real timeline based on claim status
-    const timeline = [
-        { status: 'Claim Submitted', date: new Date(claim.created_at).toLocaleDateString('en-IN'), isCompleted: true },
-        { status: 'Under Review', date: claim.status !== 'submitted' ? new Date(claim.updated_at || claim.created_at).toLocaleDateString('en-IN') : 'In Progress', isCompleted: claim.status !== 'submitted' },
-        { status: 'Decision Made', date: ['approved', 'rejected'].includes(claim.status) ? new Date(claim.updated_at || claim.created_at).toLocaleDateString('en-IN') : 'Pending', isCompleted: ['approved', 'rejected'].includes(claim.status) }
-    ];
 
     const documents = claim.documents || [];
 
@@ -69,33 +60,32 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
 
                 <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div className="md:col-span-2 space-y-8">
-                        <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-sm">
-                            <h3 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wider">Claim Status</h3>
-                            <ClaimStatusTimeline timeline={timeline} />
-                        </div>
-
                         <div className="space-y-4">
                             <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider border-b border-slate-100 pb-2">Claim Details</h3>
                             <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm">
                                 <div>
                                     <p className="text-slate-500 text-xs">Patient Name</p>
-                                    <p className="font-semibold text-slate-800">{claim.patient_name}</p>
+                                    <p className="font-semibold text-slate-800">{claim.patient_name || claim.title || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-slate-500 text-xs">Date of Treatment</p>
-                                    <p className="font-semibold text-slate-800">{new Date(claim.treatment_date).toLocaleDateString()}</p>
+                                    <p className="font-semibold text-slate-800">
+                                        {claim.bill_date || claim.treatment_date
+                                            ? new Date(claim.bill_date || claim.treatment_date).toLocaleDateString()
+                                            : 'N/A'}
+                                    </p>
                                 </div>
                                 <div>
-                                    <p className="text-slate-500 text-xs">Hospital/Provider</p>
-                                    <p className="font-semibold text-slate-800">{claim.hospital_name}</p>
+                                    <p className="text-slate-500 text-xs">Hospital / Provider</p>
+                                    <p className="font-semibold text-slate-800">{claim.provider_name || claim.hospital_name || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-slate-500 text-xs">Claimed Amount</p>
-                                    <p className="font-semibold text-slate-800">${claim.amount?.toLocaleString()}</p>
+                                    <p className="font-semibold text-slate-800">${(claim.amount_requested ?? claim.amount ?? 0).toLocaleString()}</p>
                                 </div>
                                 <div className="col-span-2">
-                                    <p className="text-slate-500 text-xs">Diagnosis</p>
-                                    <p className="font-semibold text-slate-800">{claim.diagnosis}</p>
+                                    <p className="text-slate-500 text-xs">Diagnosis / Notes</p>
+                                    <p className="font-semibold text-slate-800">{claim.customer_comments || claim.diagnosis || 'N/A'}</p>
                                 </div>
                             </div>
                         </div>
@@ -106,21 +96,32 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
                             <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider mb-4">Uploaded Documents ({documents.length})</h3>
                             <div className="space-y-3">
                                 {documents.map((doc: any, idx: number) => (
-                                    <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                                        <div className="flex items-start gap-3">
-                                            <div className="p-2 bg-rose-50 text-rose-500 rounded-lg">
+                                    <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <div className="p-2 bg-rose-50 text-rose-500 rounded-lg shrink-0">
                                                 <FileText size={18} />
                                             </div>
-                                            <div className="flex-1 min-w-0">
+                                            <div className="min-w-0 flex-1">
                                                 <p className="text-sm font-medium text-slate-800 truncate">{doc.name}</p>
                                             </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            {doc.url && (
+                                                <a
+                                                    href={doc.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-teal-600 transition-colors"
+                                                    title="View Document"
+                                                >
+                                                    <Eye size={16} />
+                                                </a>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
-
-                        <DownloadDocsButton count={documents.length} />
                     </div>
                 </div>
             </div>

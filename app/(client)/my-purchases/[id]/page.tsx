@@ -90,7 +90,14 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
                         <div className="space-y-4 text-sm">
                             <div className="flex justify-between py-2 border-b border-slate-100">
                                 <span className="text-slate-500">Amount Paid</span>
-                                <span className="font-semibold">$ {planDetails.price?.toLocaleString() || 0}</span>
+                                <span className="font-semibold">
+                                    {purchase.currency === 'INR' ? '₹' : '$'}{' '}
+                                    {Number(purchase.amount_paid || planDetails.price).toLocaleString()}
+                                </span>
+                            </div>
+                            <div className="flex justify-between py-2 border-b border-slate-100">
+                                <span className="text-slate-500">Currency</span>
+                                <span className="font-medium text-slate-700">{purchase.currency || 'USD'}</span>
                             </div>
                             <div className="flex justify-between py-2 border-b border-slate-100">
                                 <span className="text-slate-500">Purchase Date</span>

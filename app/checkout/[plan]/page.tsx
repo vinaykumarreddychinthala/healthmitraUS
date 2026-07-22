@@ -88,6 +88,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
     const [countryMode, setCountryMode] = useState<CountryMode>('us');
     const [exchangeRate, setExchangeRate] = useState<number>(84); // default fallback USD→INR
     const [rateLoading, setRateLoading] = useState(false);
+    const [selectedGateway, setSelectedGateway] = useState<'stripe' | 'razorpay' | null>(null);
 
     // Fetch live USD→INR exchange rate
     useEffect(() => {
@@ -352,25 +353,57 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
         if (!plan || !guestInfo) return;
         setProcessing(true);
         try {
-            const orderRes = await fetch('/api/checkout/order', {
+            // Razorpay only supports INR — convert USD→INR when in US mode
+            const totalInINR = isIndia ? total : Math.round(total * exchangeRate);
+            const amountInPaise = Math.round(totalInINR * 100); // paise
+            const orderRes = await fetch('/api/razorpay/create-order', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ planId: plan.id, amount: total, promoCode: appliedCode?.code }),
+                body: JSON.stringify({
+                    amount: amountInPaise,
+                    currency: 'INR', // Razorpay standard checkout only supports INR
+                    // Razorpay receipt max 40 chars: "hm_" + 8 chars of planId + "_" + 8 digits ts = 20 chars
+                    receipt: `hm_${plan.id.slice(-8)}_${String(Date.now()).slice(-8)}`,
+                    notes: { planId: plan.id, promoCode: appliedCode?.code || '' },
+                }),
             });
             const orderData = await orderRes.json();
             if (!orderData.success) { toast.error(orderData.error || 'Failed to create order'); setProcessing(false); return; }
-            const rzp = await loadRazorpay(orderData.data.keyId);
+
+            const rzp = await loadRazorpay(orderData.data.key_id);
+            if (!rzp) { toast.error('Razorpay failed to load. Please refresh.'); setProcessing(false); return; }
+
             rzp.open({
-                key: orderData.data.keyId, amount: orderData.data.amount,
-                currency: orderData.data.currency, name: 'HealthMitra',
-                description: plan.name, order_id: orderData.data.orderId,
-                handler: async (response: { razorpay_payment_id: string }) => {
+                key: orderData.data.key_id,
+                amount: orderData.data.amount,
+                currency: orderData.data.currency,
+                name: 'HealthMitra',
+                description: plan.name,
+                order_id: orderData.data.order_id,
+                handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+                    // Verify signature on backend before recording purchase
+                    const verifyRes = await fetch('/api/razorpay/verify-payment', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                        }),
+                    });
+                    const verifyData = await verifyRes.json();
+                    if (!verifyData.success) { toast.error('Payment verification failed. Contact support.'); return; }
+
                     const result = await callGuestPurchase('razorpay', response.razorpay_payment_id);
                     if (result?.success) onPurchaseSuccess(result);
                     else toast.error(result?.error || 'Purchase failed');
                 },
-                prefill: { name: guestInfo.name, email: guestInfo.email, contact: guestInfo.phone },
+                modal: {
+                    ondismiss: () => { toast.info('Payment cancelled'); setProcessing(false); },
+                },
+                prefill: { name: editName || guestInfo.name, email: editEmail || guestInfo.email, contact: editPhone || guestInfo.phone },
                 theme: { color: '#0891b2' },
             });
+        } catch {
+            toast.error('Something went wrong. Please try again.');
         } finally { setProcessing(false); }
     };
 
@@ -813,16 +846,14 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                     </CardContent>
                                 </Card>
 
-                                {/* Payment Card */}
+                                {/* ── PAYMENT GATEWAY SELECTOR ─────────────────── */}
                                 <Card className="border border-slate-200 shadow-sm overflow-hidden">
                                     <div className="h-1.5 bg-gradient-to-r from-primary to-cyan-400" />
                                     <CardHeader className="pb-3 pt-5">
                                         <CardTitle className="text-lg text-slate-800 flex items-center gap-2">
-                                            <Lock className="w-4 h-4 text-primary" /> Payment
+                                            <CreditCard className="w-4 h-4 text-primary" /> Choose Your Payment
                                         </CardTitle>
-                                        <p className="text-xs text-slate-400 mt-0.5">
-                                            {isIndia ? '🇮🇳 Paying in INR via Razorpay' : '🇺🇸 Paying in USD via PayPal / Stripe'}
-                                        </p>
+                                        <p className="text-xs text-slate-400 mt-0.5">Select a payment gateway to continue</p>
                                     </CardHeader>
                                     <CardContent className="pt-0 space-y-4">
                                         {isEmailChanged ? (
@@ -859,44 +890,127 @@ export default function CheckoutPage({ params }: { params: Promise<{ plan: strin
                                             </div>
                                         ) : (
                                             <>
-                                                {!anyLivePayment && (
-                                                    <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium bg-amber-50 border border-amber-200 text-amber-700">
-                                                        <AlertCircle className="w-4 h-4 shrink-0" /> Test Payment Mode
-                                                    </div>
-                                                )}
+                                                {/* Amount display */}
                                                 <div className="text-center py-3 border border-slate-100 rounded-xl bg-slate-50">
                                                     <p className="text-3xl font-bold text-slate-900">{currency}{total.toLocaleString()}</p>
                                                     <p className="text-xs text-slate-400 mt-1">total amount{isIndia ? ' (incl. GST)' : ''}</p>
                                                 </div>
 
-                                                {/* India: Razorpay only */}
-                                                {isIndia && razorpaySettings.enabled && (
-                                                    <Button onClick={handleRazorpay} disabled={processing} className="w-full h-12 text-sm font-semibold bg-[#072654] hover:bg-[#061e42] text-white gap-2">
-                                                        {processing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><CreditCard className="h-4 w-4" /> Pay with Razorpay</>}
-                                                    </Button>
-                                                )}
-                                                {isIndia && !razorpaySettings.enabled && (
-                                                    <p className="text-xs text-center text-slate-400">Razorpay is not configured for India payments.</p>
-                                                )}
+                                                {/* Gateway picker cards */}
+                                                {!selectedGateway && (
+                                                    <div className="space-y-3">
+                                                        {/* Stripe card */}
+                                                        <button
+                                                            id="gateway-stripe-btn"
+                                                            onClick={() => setSelectedGateway('stripe')}
+                                                            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-[#635BFF] hover:bg-[#635BFF]/5 transition-all text-left group"
+                                                        >
+                                                            <div className="w-12 h-12 rounded-xl bg-[#635BFF]/10 flex items-center justify-center shrink-0 group-hover:bg-[#635BFF]/20 transition-colors">
+                                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                                                    <path d="M13.477 8.3c0-.78.643-1.08 1.705-.08l3.298-3.298C17.174 3.69 15.356 3 13.144 3 9.614 3 7.2 4.893 7.2 8.5c0 5.4 7.44 4.547 7.44 6.88 0 .908-.793 1.2-1.887 1.2-1.63 0-3.59-.674-4.803-1.887L5 17.638C6.588 19.239 8.88 20 11.787 20c3.635 0 6.213-1.8 6.213-5.4 0-5.838-7.44-4.8-7.44-6.888l.917-.412z" fill="#635BFF"/>
+                                                                </svg>
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <p className="font-semibold text-slate-800 text-sm">Pay with Stripe</p>
+                                                                <p className="text-xs text-slate-400 mt-0.5">Cards · Apple Pay · Google Pay · USD</p>
+                                                            </div>
+                                                            <svg className="w-5 h-5 text-slate-300 group-hover:text-[#635BFF] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+                                                            </svg>
+                                                        </button>
 
-                                                {/* US: PayPal + Stripe */}
-                                                {!isIndia && paypalSettings.enabled && (
-                                                    <div>
-                                                        {processing && <div className="flex items-center justify-center gap-2 py-3 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Completing payment...</div>}
-                                                        <div ref={paypalRef} id="paypal-button-container" className={processing ? 'opacity-40 pointer-events-none' : ''} />
+                                                        {/* Razorpay card */}
+                                                        <button
+                                                            id="gateway-razorpay-btn"
+                                                            onClick={() => setSelectedGateway('razorpay')}
+                                                            className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-[#072654] hover:bg-[#072654]/5 transition-all text-left group"
+                                                        >
+                                                            <div className="w-12 h-12 rounded-xl bg-[#072654]/10 flex items-center justify-center shrink-0 group-hover:bg-[#072654]/20 transition-colors">
+                                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                                                    <rect width="24" height="24" rx="4" fill="#072654"/>
+                                                                    <path d="M7 8h6c1.1 0 2 .9 2 2s-.9 2-2 2H9l4 4H10.5L6.5 12H7V8z" fill="white"/>
+                                                                    <path d="M13 12l4-4" stroke="#3395FF" strokeWidth="2" strokeLinecap="round"/>
+                                                                </svg>
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <p className="font-semibold text-slate-800 text-sm">Pay with Razorpay</p>
+                                                                <p className="text-xs text-slate-400 mt-0.5">UPI · Cards · Net Banking · Wallets · INR</p>
+                                                            </div>
+                                                            <svg className="w-5 h-5 text-slate-300 group-hover:text-[#072654] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+                                                            </svg>
+                                                        </button>
                                                     </div>
                                                 )}
-                                                {!isIndia && stripeSettings.enabled && stripeSettings.clientSecret && stripePromise && (
-                                                    <Elements stripe={stripePromise} options={{ clientSecret: stripeSettings.clientSecret }}>
-                                                        <StripePaymentForm total={total} planId={plan.id} promoCode={appliedCode?.code} onSuccess={handleStripeSuccess} />
-                                                    </Elements>
+
+                                                {/* Selected gateway: Stripe */}
+                                                {selectedGateway === 'stripe' && (
+                                                    <div className="space-y-3">
+                                                        <button
+                                                            onClick={() => setSelectedGateway(null)}
+                                                            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-primary transition-colors"
+                                                        >
+                                                            <ArrowLeft className="w-3.5 h-3.5" /> Change payment method
+                                                        </button>
+                                                        <div className="flex items-center gap-2 px-3 py-2 bg-[#635BFF]/8 border border-[#635BFF]/20 rounded-lg">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                                <path d="M13.477 8.3c0-.78.643-1.08 1.705-.08l3.298-3.298C17.174 3.69 15.356 3 13.144 3 9.614 3 7.2 4.893 7.2 8.5c0 5.4 7.44 4.547 7.44 6.88 0 .908-.793 1.2-1.887 1.2-1.63 0-3.59-.674-4.803-1.887L5 17.638C6.588 19.239 8.88 20 11.787 20c3.635 0 6.213-1.8 6.213-5.4 0-5.838-7.44-4.8-7.44-6.888l.917-.412z" fill="#635BFF"/>
+                                                            </svg>
+                                                            <span className="text-xs font-medium text-[#635BFF]">Stripe · Secure card payment</span>
+                                                        </div>
+                                                        {stripeSettings.enabled && stripeSettings.clientSecret && stripePromise ? (
+                                                            <Elements stripe={stripePromise} options={{ clientSecret: stripeSettings.clientSecret }}>
+                                                                <StripePaymentForm total={total} planId={plan.id} promoCode={appliedCode?.code} onSuccess={handleStripeSuccess} />
+                                                            </Elements>
+                                                        ) : (
+                                                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm text-center">
+                                                                Stripe is not enabled for this session. Please choose Razorpay or contact support.
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )}
 
-                                                {/* Test Payment */}
-                                                {!anyLivePayment && (
-                                                    <Button onClick={handleTestPayment} disabled={processing} className="w-full h-12 text-sm font-semibold bg-primary hover:bg-primary/90 text-white gap-2">
-                                                        {processing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="h-4 w-4" /> Complete Purchase (Test)</>}
-                                                    </Button>
+                                                {/* Selected gateway: Razorpay */}
+                                                {selectedGateway === 'razorpay' && (
+                                                    <div className="space-y-3">
+                                                        <button
+                                                            onClick={() => setSelectedGateway(null)}
+                                                            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-primary transition-colors"
+                                                        >
+                                                            <ArrowLeft className="w-3.5 h-3.5" /> Change payment method
+                                                        </button>
+                                                        <div className="flex items-center gap-2 px-3 py-2 bg-[#072654]/8 border border-[#072654]/20 rounded-lg">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                                <rect width="16" height="16" rx="3" fill="#072654"/>
+                                                                <path d="M4 5h4c.73 0 1.33.6 1.33 1.33S8.73 7.67 8 7.67H5.33l2.67 2.66H6.33L4 7.67V5z" fill="white"/>
+                                                            </svg>
+                                                            <span className="text-xs font-medium text-[#072654]">Razorpay · UPI, Cards, Net Banking</span>
+                                                        </div>
+                                                        <Button
+                                                            id="razorpay-pay-btn"
+                                                            onClick={handleRazorpay}
+                                                            disabled={processing}
+                                                            className="w-full h-12 text-sm font-semibold bg-[#072654] hover:bg-[#061e42] text-white gap-2"
+                                                        >
+                                                            {processing
+                                                                ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
+                                                                : <><CreditCard className="h-4 w-4" /> Pay {currency}{total.toLocaleString()} with Razorpay</>
+                                                            }
+                                                        </Button>
+                                                        <p className="text-xs text-center text-slate-400">Supports UPI · Cards · Net Banking · Wallets</p>
+                                                    </div>
+                                                )}
+
+                                                {/* Test Payment fallback — only if no gateway is selected and nothing is configured */}
+                                                {!anyLivePayment && !selectedGateway && (
+                                                    <>
+                                                        <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium bg-amber-50 border border-amber-200 text-amber-700">
+                                                            <AlertCircle className="w-4 h-4 shrink-0" /> Test Payment Mode — No live gateway configured
+                                                        </div>
+                                                        <Button onClick={handleTestPayment} disabled={processing} className="w-full h-12 text-sm font-semibold bg-primary hover:bg-primary/90 text-white gap-2">
+                                                            {processing ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="h-4 w-4" /> Complete Purchase (Test)</>}
+                                                        </Button>
+                                                    </>
                                                 )}
                                             </>
                                         )}

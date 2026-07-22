@@ -36,6 +36,8 @@ export function WalletView({
     const addedMoney = Number(wallet?.added_money || 0);
     // bill refund balance = total minus added top-ups (withdrawable)
     const billRefundBalance = Math.max(0, totalBalance - addedMoney);
+    // Currency symbol based on wallet currency (INR shows ₹, everything else $)
+    const sym = wallet?.currency === 'INR' ? '₹' : '$';
 
     const todayWithdrawals = wallet?.todayWithdrawals || 0;
     const MAX_DAILY_WITHDRAWALS = 5;
@@ -105,7 +107,7 @@ export function WalletView({
                                 <Wallet size={16} /> TOTAL WALLET BALANCE
                             </h2>
                             <div className="text-4xl font-bold mb-4">
-                                ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                {sym}{totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </div>
 
                             {/* Balance Breakdown */}
@@ -115,7 +117,7 @@ export function WalletView({
                                         <Upload size={12} /> Added via Stripe
                                     </div>
                                     <p className="text-xl font-bold">
-                                        ${addedMoney.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        {sym}{addedMoney.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </p>
                                     <p className="text-[10px] text-emerald-200 mt-1 flex items-center gap-1">
                                         <AlertCircle size={10} /> For services only
@@ -126,7 +128,7 @@ export function WalletView({
                                         <Receipt size={12} /> Bill Refunds
                                     </div>
                                     <p className="text-xl font-bold">
-                                        ${billRefundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        {sym}{billRefundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </p>
                                     <p className="text-[10px] text-emerald-100 mt-1 flex items-center gap-1">
                                         <CheckCircle size={10} /> Withdrawable
@@ -178,7 +180,7 @@ export function WalletView({
                                 CREDITED
                             </div>
                             <p className="text-lg font-bold text-slate-800">
-                                ${stats.totalCredited.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                {sym}{stats.totalCredited.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </p>
                             <p className="text-xs text-slate-400 mt-1">{stats.creditedCount} txns</p>
                         </div>
@@ -190,7 +192,7 @@ export function WalletView({
                                 DEBITED
                             </div>
                             <p className="text-lg font-bold text-slate-800">
-                                ${stats.totalDebited.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                {sym}{stats.totalDebited.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </p>
                             <p className="text-xs text-slate-400 mt-1">{stats.debitedCount} txns</p>
                         </div>
@@ -202,7 +204,7 @@ export function WalletView({
                                 THIS MONTH
                             </div>
                             <p className="text-lg font-bold text-slate-800">
-                                ${stats.thisMonthSpend.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                {sym}{stats.thisMonthSpend.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </p>
                             <p className="text-xs text-slate-400 mt-1">{stats.thisMonthCount} txns</p>
                         </div>
@@ -216,7 +218,7 @@ export function WalletView({
                                     <Receipt size={18} className="text-teal-600" /> Withdrawable Bill Refunds
                                 </h3>
                                 <span className="text-sm text-teal-600 font-semibold">
-                                    ${billRefundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                    {sym}{billRefundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 </span>
                             </div>
                             <div className="divide-y divide-slate-100">
@@ -233,7 +235,7 @@ export function WalletView({
                                         </div>
                                         <div className="text-right">
                                             <p className="font-bold text-emerald-600">
-                                                ${bill.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                {sym}{bill.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                             </p>
                                             <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
                                                 Withdrawable

@@ -305,14 +305,17 @@ export function ReimbursementsView({ initialClaims }: ReimbursementsViewProps) {
                                                 claim.status === 'rejected' ? 'text-red-600' :
                                                     'text-slate-800'
                                                 }`}>
-                                                ${claim.amount?.toLocaleString('en-IN')}
+                                                ${(claim.amount_requested ?? claim.amount ?? 0).toLocaleString('en-IN')}
                                             </p>
                                         </div>
 
                                         <div className="flex gap-2">
-                                            <button className="px-3 py-1.5 text-sm font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors">
+                                            <Link
+                                                href={`/reimbursements/${claim.id}`}
+                                                className="px-3 py-1.5 text-sm font-medium text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                                            >
                                                 View Details
-                                            </button>
+                                            </Link>
                                             {claim.status === 'approved' && (
                                                 <button
                                                     onClick={() => handleDownloadReceipt(claim.id)}
